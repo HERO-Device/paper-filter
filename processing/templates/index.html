@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scopus Paper Filter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            color: #6c757d;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            min-height: 600px;
+        }
+
+        .sidebar {
+            background: #f8f9fa;
+            padding: 20px;
+            border-right: 2px solid #e9ecef;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+
+        .filter-section {
+            margin-bottom: 30px;
+        }
+
+        .filter-section h3 {
+            color: #495057;
+            font-size: 1em;
+            margin-bottom: 10px;
+        }
+
+        textarea, input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 0.9em;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .checkbox-group {
+            margin: 10px 0;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .number-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .number-inputs label {
+            display: block;
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .content-area {
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: auto;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #495057;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .swipe-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            min-height: 500px;
+        }
+
+        .swipe-progress {
+            width: 100%;
+            max-width: 600px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .swipe-progress h3 {
+            color: #495057;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+
+        .swipe-card {
+            background: white;
+            width: 100%;
+            max-width: 600px;
+            min-height: 300px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            padding: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: transform 0.3s ease;
+        }
+
+        .swipe-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 50px rgba(0,0,0,0.2);
+        }
+
+        .swipe-card .title {
+            font-size: 1.5em;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .swipe-buttons {
+            display: flex;
+            gap: 20px;
+        }
+
+        .swipe-btn {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            font-size: 3em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+
+        .swipe-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+        }
+
+        .swipe-btn.reject {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+            color: white;
+        }
+
+        .swipe-btn.keep {
+            background: linear-gradient(135deg, #51cf66, #37b24d);
+            color: white;
+        }
+
+        .swipe-stats {
+            display: flex;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .swipe-stat {
+            text-align: center;
+        }
+
+        .swipe-stat .label {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .swipe-stat .count {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .swipe-stat.kept .count {
+            color: #51cf66;
+        }
+
+        .swipe-stat.rejected .count {
+            color: #ff6b6b;
+        }
+
+        .swipe-complete {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .swipe-complete h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .keyboard-hint {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        kbd {
+            background: #333;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .word-bar {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .word-label {
+            width: 150px;
+            font-weight: 500;
+        }
+
+        .bar-container {
+            flex: 1;
+            background: #e9ecef;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 0 10px;
+        }
+
+        .bar-fill {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+            color: white;
+            font-size: 0.85em;
+            transition: width 0.3s;
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #6c757d;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .pagination button {
+            width: auto;
+            padding: 8px 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📄 Scopus Paper Filter</h1>
+            <p>Filter and refine your research papers using NLP-based criteria</p>
+        </header>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Total Papers</h3>
+                <div class="value" id="stat-total">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Filtered Papers</h3>
+                <div class="value" id="stat-filtered">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Removed</h3>
+                <div class="value" id="stat-removed">-</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <h2>🔍 Filters</h2>
+
+                <div class="filter-section">
+                    <h3>Include Keywords</h3>
+                    <textarea id="include-keywords" placeholder="Enter keywords (one per line)"></textarea>
+                    <div class="checkbox-group">
+                        <label>
+                            <input type="checkbox" id="match-all">
+                            Require ALL keywords (AND logic)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="filter-section">
+                    <h3>Exclude Keywords</h3>
+                    <textarea id="exclude-keywords" placeholder="Enter keywords to exclude (one per line)"></textarea>
+                </div>
+
+                <div class="filter-section">
+                    <h3>Title Length</h3>
+                    <div class="number-inputs">
+                        <div>
+                            <label>Min Words</label>
+                            <input type="number" id="min-words" value="0" min="0">
+                        </div>
+                        <div>
+                            <label>Max Words</label>
+                            <input type="number" id="max-words" value="100" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-primary" onclick="applyFilters()">🔄 Apply Filters</button>
+                <button class="btn-secondary" onclick="resetFilters()">↺ Reset Filters</button>
+            </div>
+
+            <div class="content-area">
+                <div id="message-area"></div>
+
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('overview')">📊 Overview</button>
+                    <button class="tab" onclick="switchTab('swipe')">👆 Swipe</button>
+                    <button class="tab" onclick="switchTab('preview')">📝 Preview Data</button>
+                    <button class="tab" onclick="switchTab('export')">💾 Export</button>
+                </div>
+
+                <div id="overview" class="tab-content active">
+                    <h2 style="margin-bottom: 20px;">Most Common Words in Titles</h2>
+                    <div class="chart-container" id="word-chart">
+                        <div class="loading">Loading word frequencies...</div>
+                    </div>
+                </div>
+
+                <div id="swipe" class="tab-content">
+                    <div class="swipe-container" id="swipe-area">
+                        <div class="swipe-progress">
+                            <h3>Progress: <span id="swipe-current">0</span> / <span id="swipe-total">0</span></h3>
+                            <div class="progress-bar-bg">
+                                <div class="progress-bar-fill" id="progress-fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div class="swipe-card" id="swipe-card">
+                            <div class="title" id="swipe-title">Loading...</div>
+                        </div>
+
+                        <div class="swipe-buttons">
+                            <button class="swipe-btn reject" onclick="swipeDecision('N')" title="Press N to reject">✖</button>
+                            <button class="swipe-btn keep" onclick="swipeDecision('Y')" title="Press Y to keep">✓</button>
+                        </div>
+
+                        <div class="swipe-stats">
+                            <div class="swipe-stat kept">
+                                <div class="label">Kept</div>
+                                <div class="count" id="kept-count">0</div>
+                            </div>
+                            <div class="swipe-stat rejected">
+                                <div class="label">Rejected</div>
+                                <div class="count" id="rejected-count">0</div>
+                            </div>
+                        </div>
+
+                        <div class="keyboard-hint">
+                            💡 <strong>Keyboard shortcuts:</strong> Press <kbd>Y</kbd> to keep, <kbd>N</kbd> to reject
+                        </div>
+                    </div>
+                </div>
+
+                <div id="preview" class="tab-content">
+                    <div class="search-box">
+                        <input type="text" id="search-input" placeholder="🔍 Search in results..." onkeyup="searchData()">
+                    </div>
+                    <div class="table-container" id="data-table">
+                        <div class="loading">Loading data...</div>
+                    </div>
+                    <div class="pagination" id="pagination"></div>
+                </div>
+
+                <div id="export" class="tab-content">
+                    <h2 style="margin-bottom: 20px;">Export Filtered Data</h2>
+                    <div class="stat-card" style="margin-bottom: 20px;">
+                        <h3>Papers to Export</h3>
+                        <div class="value" id="export-count">-</div>
+                    </div>
+                    <button class="btn-primary" onclick="exportData()">⬇️ Download Filtered CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 0;
+        let searchTerm = '';
+
+        // Load data on page load
+        window.onload = function() {
+            loadData();
+        };
+
+        async function loadData() {
+            try {
+                const response = await fetch('/api/load');
+                const data = await response.json();
+
+                if (data.error) {
+                    showMessage(data.error, 'error');
+                    return;
+                }
+
+                updateStats(data);
+                loadWordFrequencies();
+                loadPreview();
+            } catch (error) {
+                showMessage('Error loading data: ' + error.message, 'error');
+            }
+        }
+
+        async function applyFilters() {
+            const includeKeywords = document.getElementById('include-keywords').value;
+            const excludeKeywords = document.getElementById('exclude-keywords').value;
+            const matchAll = document.getElementById('match-all').checked;
+            const minWords = parseInt(document.getElementById('min-words').value);
+            const maxWords = parseInt(document.getElementById('max-words').value);
+
+            try {
+                const response = await fetch('/api/filter', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        include_keywords: includeKeywords,
+                        exclude_keywords: excludeKeywords,
+                        match_all: matchAll,
+                        min_words: minWords,
+                        max_words: maxWords
+                    })
+                });
+
+                const data = await response.json();
+                updateStats(data);
+                showMessage(`Filters applied! ${data.filtered} papers remaining.`, 'success');
+                loadWordFrequencies();
+                loadPreview();
+            } catch (error) {
+                showMessage('Error applying filters: ' + error.message, 'error');
+            }
+        }
+
+        async function resetFilters() {
+            try {
+                const response = await fetch('/api/reset', {method: 'POST'});
+                const data = await response.json();
+
+                document.getElementById('include-keywords').value = '';
+                document.getElementById('exclude-keywords').value = '';
+                document.getElementById('match-all').checked = false;
+                document.getElementById('min-words').value = '0';
+                document.getElementById('max-words').value = '100';
+
+                updateStats(data);
+                showMessage('Filters reset!', 'success');
+                loadWordFrequencies();
+                loadPreview();
+            } catch (error) {
+                showMessage('Error resetting filters: ' + error.message, 'error');
+            }
+        }
+
+        async function loadWordFrequencies() {
+            try {
+                const response = await fetch('/api/word_frequencies?top_n=30');
+                const data = await response.json();
+
+                const chartDiv = document.getElementById('word-chart');
+
+                if (data.frequencies.length === 0) {
+                    chartDiv.innerHTML = '<p style="text-align:center;color:#6c757d;">No data available</p>';
+                    return;
+                }
+
+                const maxCount = Math.max(...data.frequencies.map(f => f.count));
+
+                chartDiv.innerHTML = data.frequencies.map(f => `
+                    <div class="word-bar">
+                        <div class="word-label">${f.word}</div>
+                        <div class="bar-container">
+                            <div class="bar-fill" style="width: ${(f.count / maxCount) * 100}%">
+                                ${f.count}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading word frequencies:', error);
+            }
+        }
+
+        async function loadPreview(page = 0) {
+            currentPage = page;
+
+            try {
+                const response = await fetch(`/api/preview?page=${page}&per_page=50&search=${searchTerm}`);
+                const data = await response.json();
+
+                const tableDiv = document.getElementById('data-table');
+
+                if (data.total === 0) {
+                    tableDiv.innerHTML = '<p style="text-align:center;color:#6c757d;">No papers to display</p>';
+                    return;
+                }
+
+                let html = '<table><thead><tr>';
+                data.columns.forEach(col => {
+                    html += `<th>${col}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+
+                data.data.forEach(row => {
+                    html += '<tr>';
+                    data.columns.forEach(col => {
+                        html += `<td>${row[col] || ''}</td>`;
+                    });
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                tableDiv.innerHTML = html;
+
+                // Update pagination
+                const totalPages = Math.ceil(data.total / data.per_page);
+                const paginationDiv = document.getElementById('pagination');
+
+                let paginationHtml = '';
+                if (page > 0) {
+                    paginationHtml += `<button class="btn-secondary" onclick="loadPreview(${page - 1})">← Previous</button>`;
+                }
+                paginationHtml += `<span style="padding: 8px 16px;">Page ${page + 1} of ${totalPages}</span>`;
+                if (page < totalPages - 1) {
+                    paginationHtml += `<button class="btn-secondary" onclick="loadPreview(${page + 1})">Next →</button>`;
+                }
+
+                paginationDiv.innerHTML = paginationHtml;
+            } catch (error) {
+                console.error('Error loading preview:', error);
+            }
+        }
+
+        function searchData() {
+            searchTerm = document.getElementById('search-input').value;
+            loadPreview(0);
+        }
+
+        async function exportData() {
+            try {
+                window.location.href = '/api/export';
+                showMessage('Download started!', 'success');
+            } catch (error) {
+                showMessage('Error exporting data: ' + error.message, 'error');
+            }
+        }
+
+        function updateStats(data) {
+            document.getElementById('stat-total').textContent = data.total || 0;
+            document.getElementById('stat-filtered').textContent = data.filtered || 0;
+            document.getElementById('stat-removed').textContent = (data.total || 0) - (data.filtered || 0);
+            document.getElementById('export-count').textContent = data.filtered || 0;
+        }
+
+        function showMessage(message, type) {
+            const messageArea = document.getElementById('message-area');
+            messageArea.innerHTML = `<div class="${type}">${message}</div>`;
+            setTimeout(() => {
+                messageArea.innerHTML = '';
+            }, 5000);
+        }
+
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabName).classList.add('active');
+
+            // Load data for the tab
+            if (tabName === 'preview') {
+                loadPreview();
+            } else if (tabName === 'overview') {
+                loadWordFrequencies();
+            } else if (tabName === 'swipe') {
+                loadSwipeCard();
+            }
+        }
+
+        // Swipe functionality
+        async function loadSwipeCard() {
+            try {
+                const response = await fetch('/api/swipe/current');
+                const data = await response.json();
+
+                if (data.done) {
+                    showSwipeComplete(data.kept, data.rejected);
+                    return;
+                }
+
+                document.getElementById('swipe-title').textContent = data.title;
+                document.getElementById('swipe-current').textContent = data.index + 1;
+                document.getElementById('swipe-total').textContent = data.total;
+                document.getElementById('kept-count').textContent = data.kept_count;
+                document.getElementById('rejected-count').textContent = data.rejected_count;
+
+                const progress = ((data.index + 1) / data.total) * 100;
+                document.getElementById('progress-fill').style.width = progress + '%';
+
+            } catch (error) {
+                showMessage('Error loading paper: ' + error.message, 'error');
+            }
+        }
+
+        async function swipeDecision(decision) {
+            try {
+                const response = await fetch('/api/swipe/decision', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({decision: decision})
+                });
+
+                const data = await response.json();
+
+                if (data.done) {
+                    showSwipeComplete(data.kept_count, data.rejected_count);
+                } else {
+                    loadSwipeCard();
+                }
+
+            } catch (error) {
+                showMessage('Error recording decision: ' + error.message, 'error');
+            }
+        }
+
+        function showSwipeComplete(kept, rejected) {
+            const swipeArea = document.getElementById('swipe-area');
+            swipeArea.innerHTML = `
+                <div class="swipe-complete">
+                    <h2>🎉 All Done!</h2>
+                    <div class="swipe-stats">
+                        <div class="swipe-stat kept">
+                            <div class="label">Kept</div>
+                            <div class="count">${kept}</div>
+                        </div>
+                        <div class="swipe-stat rejected">
+                            <div class="label">Rejected</div>
+                            <div class="count">${rejected}</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 30px;">
+                        <button class="btn-primary" onclick="exportKeptPapers()" style="margin-right: 10px;">
+                            ⬇️ Download Kept Papers
+                        </button>
+                        <button class="btn" onclick="resetSwipe()">
+                            🔄 Start Over
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function resetSwipe() {
+            try {
+                await fetch('/api/swipe/reset', {method: 'POST'});
+                location.reload();
+            } catch (error) {
+                showMessage('Error resetting: ' + error.message, 'error');
+            }
+        }
+
+        async function exportKeptPapers() {
+            try {
+                window.location.href = '/api/swipe/export_kept';
+                showMessage('Downloading kept papers...', 'success');
+            } catch (error) {
+                showMessage('Error exporting: ' + error.message, 'error');
+            }
+        }
+
+        // Keyboard shortcuts for swipe
+        document.addEventListener('keydown', function(event) {
+            const activeTab = document.querySelector('.tab-content.active');
+            if (activeTab && activeTab.id === 'swipe') {
+                if (event.key.toLowerCase() === 'y') {
+                    swipeDecision('Y');
+                } else if (event.key.toLowerCase() === 'n') {
+                    swipeDecision('N');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
