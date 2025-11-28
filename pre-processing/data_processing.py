@@ -1,4 +1,5 @@
 import pandas as pd
+import sys
 from pathlib import Path
 
 class PaperProcessor:
@@ -64,6 +65,9 @@ class PaperProcessor:
         if self.df is None:
             raise ValueError("No Data to save")
 
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
         self.df.to_csv(output_path, index=False)
         print(f"Saved processed data to {output_path}.")
         return self
@@ -80,30 +84,49 @@ class PaperProcessor:
             "removed": self.original_count - len(self.df)
         }
 
-if __name__ == "__main__":
-    data_path = Path("../data")
-    csv_files = list(data_path.glob("scopus_export*.csv"))
+def main():
+    """Main function for command line usage"""
 
-    if not csv_files:
-        print("No CSV files found matching 'scopus_export*.csv' in data directory")
+    if len(sys.argv) < 2:
+        print("Usage: python data_processing.py <input.csv> [output.csv]")
+        print("\nExample:")
+        print("\n python data_processing.py ../data/raw/scopus_export.csv")
+        print("\n python data_processing.py ../data/raw/scopus_export.csv ../data/processed/deduplicated.csv")
+        sys.exit(1)
+
+    input_file = Path(sys.argv[1])
+
+    if not input_file.exists():
+        print(f"Input file not found {input_file}")
+        sys.exit(1)
+
+    if len(sys.argv) > 2:
+        output_path = Path(sys.argv[2])
     else:
-        csv_file = csv_files[0]
-        print(f"Processing {csv_file.name}")
+        output_path = input_file.parent / "deduplicated.csv"
 
-        processor = PaperProcessor(csv_file)
-        processor.load_data()
+    processor = PaperProcessor(input_file)
+    processor.load_data()
 
-        # Show columns
-        print(f"\nColumns in dataset: {processor.df.columns.tolist()}")
-        print(f"\nTitle column identified as: '{processor.get_title_column()}'")
+    print(f"\nColumns in dataset: {len(processor.df.columns)}")
+    title_col = processor.get_title_column()
+    print(f"Title column: '{title_col}'")
 
-        # Remove duplicates
-        processor.remove_duplicates()
+    print(f"\nRemoving duplicates based on '{title_col}'...")
+    processor.remove_duplicates()
 
-        # Save processed file
-        output_path = data_path / "processed_papers.csv"
-        processor.save_processed(output_path)
+    print(f"\nSaving to: {output_path}")
+    processor.save_processed(output_path)
 
-        # Print stats
-        print(f"\n=== Processing Summary ===")
-        stats = processor.get_stats()
+    stats = processor.get_stats()
+    print("Processing Summary")
+    print(f"Original papers:     {stats['original_count']:,}")
+    print(f"Duplicates removed:  {stats['removed']:,} ({stats['removal_rate']:.1f}%)")
+    print(f"Final count:         {stats['current_count']:,}")
+    print(f"Output file:         {output_path}")
+
+    print("\nDeduplication complete!")
+
+
+if __name__ == "__main__":
+    main()
