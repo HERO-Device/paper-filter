@@ -299,6 +299,92 @@
                 width: 100%;
             }
         }
+
+        /* Paper content wrapper - white background like a card */
+        .paper-content-wrapper {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            transform-origin: bottom center;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Arc swipe animations - stay gone */
+        .paper-content-wrapper.swipe-left {
+            transform: translateX(-150%) translateY(-50%) rotate(-30deg);
+            opacity: 0;
+        }
+
+        .paper-content-wrapper.swipe-right {
+            transform: translateX(150%) translateY(-50%) rotate(30deg);
+            opacity: 0;
+        }
+
+        /* Fade in for new paper content */
+        .paper-content-wrapper.fade-in {
+            animation: fadeInUp 0.4s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Remove padding from paper-card since wrapper has it */
+        .paper-card {
+            min-height: 400px;
+            padding: 0 !important;
+        }
+
+        /* Keep buttons fixed at bottom */
+        .actions {
+            margin-top: 30px;
+        }
+
+        .action-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Paper title, meta, abstract inside wrapper */
+        .paper-title {
+            font-size: 1.5em;
+            color: #212529;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .paper-meta {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .meta-item strong {
+            color: #495057;
+        }
+
+        .paper-abstract {
+            color: #495057;
+            line-height: 1.6;
+            max-height: 300px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
     </style>
 </head>
 <body>
@@ -340,18 +426,23 @@
         </div>
 
         <div id="paper-card" class="paper-card" style="display: none;">
-            <h2 class="paper-title" id="paper-title"></h2>
+            <!-- ADD THIS OPENING TAG -->
+            <div id="paper-content-wrapper" class="paper-content-wrapper">
 
-            <div class="paper-meta">
-                <div class="meta-item">
-                    <strong>Authors:</strong> <span id="paper-authors"></span>
+                <h2 class="paper-title" id="paper-title"></h2>
+
+                <div class="paper-meta">
+                    <div class="meta-item">
+                        <strong>Authors:</strong> <span id="paper-authors"></span>
+                    </div>
+                    <div class="meta-item">
+                        <strong>Year:</strong> <span id="paper-year"></span>
+                    </div>
                 </div>
-                <div class="meta-item">
-                    <strong>Year:</strong> <span id="paper-year"></span>
-                </div>
+
+                <div class="paper-abstract" id="paper-abstract"></div>
+
             </div>
-
-            <div class="paper-abstract" id="paper-abstract"></div>
 
             <div class="actions">
                 <button class="action-btn reject-btn" onclick="swipe('reject')" id="reject-btn">

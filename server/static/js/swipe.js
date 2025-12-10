@@ -1,6 +1,6 @@
 /**
- * Swipe Interface JavaScript
- * Handles paper loading, swiping, and progress tracking
+ * Swipe Interface JavaScript - With Animations
+ * Handles paper loading, swiping, and smooth transitions
  */
 
 let currentPaper = null;
@@ -30,20 +30,6 @@ async function loadPaper() {
 }
 
 /**
- * Display paper information on the card
- */
-function displayPaper(paper) {
-    currentPaper = paper;
-
-    document.getElementById('paper-title').textContent = paper.title || 'No title';
-    document.getElementById('paper-authors').textContent = paper.authors || 'Unknown';
-    document.getElementById('paper-year').textContent = paper.year || 'N/A';
-    document.getElementById('paper-abstract').textContent = paper.abstract || 'No abstract available';
-
-    document.getElementById('paper-card').style.display = 'block';
-}
-
-/**
  * Update progress bar and counters
  */
 function updateProgress(progress) {
@@ -59,21 +45,28 @@ function updateProgress(progress) {
 }
 
 /**
- * Submit swipe decision (keep or reject)
+ * Submit swipe decision with arc animation
  */
 async function swipe(decision) {
     if (isProcessing || !currentPaper) return;
 
     isProcessing = true;
+    const contentWrapper = document.getElementById('paper-content-wrapper');
+
+    // Disable buttons
     document.getElementById('keep-btn').disabled = true;
     document.getElementById('reject-btn').disabled = true;
+
+    // Animate content in arc (left or right)
+    contentWrapper.classList.add(decision === 'keep' ? 'swipe-right' : 'swipe-left');
+
+    // Wait for arc animation (500ms)
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     try {
         const response = await fetch('/api/swipe/decision', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 paper_id: currentPaper.id,
                 decision: decision
@@ -83,20 +76,80 @@ async function swipe(decision) {
         const data = await response.json();
 
         if (data.success) {
+            // Update progress
             updateProgress(data.new_progress);
 
-            // Load next paper
+            // Load next paper (displayPaper will handle cleanup)
             await loadPaper();
         } else {
             alert('Error saving decision. Please try again.');
+            contentWrapper.classList.remove('swipe-left', 'swipe-right');
         }
     } catch (error) {
         console.error('Error submitting decision:', error);
         alert('Network error. Please try again.');
+        contentWrapper.classList.remove('swipe-left', 'swipe-right');
     } finally {
         isProcessing = false;
         document.getElementById('keep-btn').disabled = false;
         document.getElementById('reject-btn').disabled = false;
+    }
+}
+
+/**
+ * Display paper information with fade-in
+ */
+function displayPaper(paper) {
+    currentPaper = paper;
+
+    const paperCard = document.getElementById('paper-card');
+    const contentWrapper = document.getElementById('paper-content-wrapper');
+
+    // Remove old animation classes immediately (before setting new content)
+    contentWrapper.classList.remove('swipe-left', 'swipe-right', 'fade-in');
+
+    // Force reflow to reset animations
+    void contentWrapper.offsetWidth;
+
+    // Update content
+    document.getElementById('paper-title').textContent = paper.title || 'No title';
+    document.getElementById('paper-authors').textContent = paper.authors || 'Unknown';
+    document.getElementById('paper-year').textContent = paper.year || 'N/A';
+    document.getElementById('paper-abstract').textContent = paper.abstract || 'No abstract available';
+
+    paperCard.style.display = 'block';
+
+    // Trigger fade-in animation
+    setTimeout(() => {
+        contentWrapper.classList.add('fade-in');
+    }, 50);
+}
+
+/**
+ * Show decision overlay (big ✓ or ✗)
+ */
+function showDecisionOverlay(decision) {
+    // Create overlay if it doesn't exist
+    let overlay = document.getElementById('decision-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'decision-overlay';
+        overlay.className = 'decision-overlay';
+        document.querySelector('.swipe-container').appendChild(overlay);
+    }
+
+    // Set icon and color
+    overlay.textContent = decision === 'keep' ? '✓' : '✗';
+    overlay.className = `decision-overlay ${decision} show`;
+}
+
+/**
+ * Hide decision overlay
+ */
+function hideDecisionOverlay() {
+    const overlay = document.getElementById('decision-overlay');
+    if (overlay) {
+        overlay.classList.remove('show');
     }
 }
 
