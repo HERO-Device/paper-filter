@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swipe Papers - Paper Filter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 1.8em;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-name {
+            color: #495057;
+            font-weight: 500;
+        }
+
+        .logout-btn {
+            padding: 8px 16px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        .logout-btn:hover {
+            background: #c82333;
+        }
+
+        .progress-bar-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            color: #495057;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            background: #e9ecef;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            justify-content: center;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+
+        .swipe-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .paper-card {
+            min-height: 400px;
+        }
+
+        .paper-title {
+            font-size: 1.5em;
+            color: #212529;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .paper-meta {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .meta-item strong {
+            color: #495057;
+        }
+
+        .paper-abstract {
+            color: #495057;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .paper-abstract::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .paper-abstract::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .paper-abstract::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 3px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .action-btn {
+            padding: 15px 40px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+
+        .action-btn:active {
+            transform: translateY(0);
+        }
+
+        .reject-btn {
+            background: #dc3545;
+            color: white;
+        }
+
+        .keep-btn {
+            background: #28a745;
+            color: white;
+        }
+
+        .keyboard-hint {
+            text-align: center;
+            margin-top: 20px;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .finished-screen {
+            text-align: center;
+            padding: 60px 20px;
+            display: none;
+        }
+
+        .finished-screen.active {
+            display: block;
+        }
+
+        .finished-icon {
+            font-size: 5em;
+            margin-bottom: 20px;
+        }
+
+        .finished-title {
+            font-size: 2em;
+            color: #212529;
+            margin-bottom: 20px;
+        }
+
+        .finished-stats {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            margin: 30px 0;
+        }
+
+        .finished-stat {
+            text-align: center;
+        }
+
+        .finished-stat-value {
+            font-size: 3em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .finished-stat-label {
+            font-size: 1.1em;
+            color: #6c757d;
+        }
+
+        .view-progress-btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .view-progress-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #dc3545;
+        }
+
+        @media (max-width: 768px) {
+            .swipe-container {
+                padding: 20px;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .action-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📄 Paper Filter</h1>
+        <div class="user-info">
+            <span class="user-name">{{ user.display_name }}</span>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="progress-bar-container">
+        <div class="progress-info">
+            <span id="progress-text">Loading...</span>
+            <span id="progress-percent">0%</span>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="kept-count">0</div>
+                <div class="stat-label">Kept</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="rejected-count">0</div>
+                <div class="stat-label">Rejected</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="swipe-container">
+        <div id="loading" class="loading">
+            Loading paper...
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            Error loading paper. Please refresh the page.
+        </div>
+
+        <div id="paper-card" class="paper-card" style="display: none;">
+            <h2 class="paper-title" id="paper-title"></h2>
+
+            <div class="paper-meta">
+                <div class="meta-item">
+                    <strong>Authors:</strong> <span id="paper-authors"></span>
+                </div>
+                <div class="meta-item">
+                    <strong>Year:</strong> <span id="paper-year"></span>
+                </div>
+            </div>
+
+            <div class="paper-abstract" id="paper-abstract"></div>
+
+            <div class="actions">
+                <button class="action-btn reject-btn" onclick="swipe('reject')" id="reject-btn">
+                    <span>❌</span> Reject (N)
+                </button>
+                <button class="action-btn keep-btn" onclick="swipe('keep')" id="keep-btn">
+                    <span>✅</span> Keep (Y)
+                </button>
+            </div>
+
+            <div class="keyboard-hint">
+                💡 Keyboard shortcuts: Y = Keep, N = Reject
+            </div>
+        </div>
+
+        <div id="finished-screen" class="finished-screen">
+            <div class="finished-icon">🎉</div>
+            <h2 class="finished-title">All Done!</h2>
+            <p style="color: #6c757d; margin-bottom: 30px;">
+                You've reviewed all papers. Great work!
+            </p>
+            <div class="finished-stats">
+                <div class="finished-stat">
+                    <div class="finished-stat-value" id="final-kept">0</div>
+                    <div class="finished-stat-label">Papers Kept</div>
+                </div>
+                <div class="finished-stat">
+                    <div class="finished-stat-value" id="final-rejected">0</div>
+                    <div class="finished-stat-label">Papers Rejected</div>
+                </div>
+            </div>
+            <button class="view-progress-btn" onclick="location.href='/progress'">
+                View Group Progress
+            </button>
+        </div>
+    </div>
+
+    <script src="/static/js/swipe.js"></script>
+</body>
+</html>
