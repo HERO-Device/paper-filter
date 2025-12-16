@@ -353,3 +353,130 @@ def get_all_papers_with_votes():
     papers = cursor.fetchall()
     conn.close()
     return papers
+
+
+# ============================================================================
+# FLAGGED PAPERS QUERIES
+# ============================================================================
+
+def flag_paper(user_id, paper_id, reason=None):
+    """
+    Flag a paper for systems team review
+
+    Returns:
+        True if successful, False otherwise
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+                       INSERT INTO flagged_papers (paper_id, flagged_by, reason)
+                       VALUES (%s, %s, %s) ON CONFLICT (paper_id, flagged_by) DO NOTHING
+            RETURNING id
+                       """, (paper_id, user_id, reason))
+
+        result = cursor.fetchone()
+        conn.commit()
+        conn.close()
+        return result is not None
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error flagging paper: {e}")
+        return False
+
+
+def get_flagged_papers(status='pending'):
+    """
+    Get all flagged papers for systems team
+
+    Args:
+        status: Filter by status (pending, reviewed, approved, rejected)
+
+    Returns:
+        list of dicts with paper data and flag info
+    """
+    conn = get_db()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor.execute("""
+                   SELECT fp.id          as flag_id,
+                          fp.flagged_at,
+                          fp.reason,
+                          fp.status,
+                          p.id           as paper_id,
+                          p.title,
+                          p.authors,
+                          p.year,
+                          p.abstract,
+                          p.doi,
+                          p.source,
+                          u.display_name as flagged_by_name,
+                          COUNT(sd.id)   as systems_reviews
+                   FROM flagged_papers fp
+                            JOIN papers p ON fp.paper_id = p.id
+                            JOIN users u ON fp.flagged_by = u.id
+                            LEFT JOIN systems_decisions sd ON fp.id = sd.flagged_paper_id
+                   WHERE fp.status = %s
+                   GROUP BY fp.id, p.id, u.display_name
+                   ORDER BY fp.flagged_at DESC
+                   """, (status,))
+    papers = cursor.fetchall()
+    conn.close()
+    return papers
+
+
+def save_systems_decision(flagged_paper_id, reviewer_id, decision, notes=None):
+    """
+    Save systems team member's decision on a flagged paper
+
+    Returns:
+        True if successful, False otherwise
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+                       INSERT INTO systems_decisions (flagged_paper_id, reviewer_id, decision, notes)
+                       VALUES (%s, %s, %s, %s) ON CONFLICT (flagged_paper_id, reviewer_id) DO
+                       UPDATE
+                           SET decision = EXCLUDED.decision, notes = EXCLUDED.notes
+                       """, (flagged_paper_id, reviewer_id, decision, notes))
+
+        conn.commit()
+        conn.close()
+        return True
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error saving systems decision: {e}")
+        return False
+
+
+def get_systems_team_progress(flagged_paper_id):
+    """
+    Get voting progress on a flagged paper
+
+    Returns:
+        dict with keep/reject counts
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+                   SELECT decision, COUNT(*) as count
+                   FROM systems_decisions
+                   WHERE flagged_paper_id = %s
+                   GROUP BY decision
+                   """, (flagged_paper_id,))
+
+    results = cursor.fetchall()
+    conn.close()
+
+    votes = {'keep': 0, 'reject': 0}
+    for decision, count in results:
+        votes[decision] = count
+
+    return votes

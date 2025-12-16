@@ -97,6 +97,65 @@ async function swipe(decision) {
 }
 
 /**
+ * Flag paper for systems team review
+ */
+async function flagPaper() {
+    if (isProcessing || !currentPaper) return;
+
+    // Confirm with user
+    const confirmed = confirm('Flag this paper for systems team review?\n\nYou will still need to Keep or Reject it yourself.');
+    if (!confirmed) return;
+
+    isProcessing = true;
+    const contentWrapper = document.getElementById('paper-content-wrapper');
+    const flagBtn = document.getElementById('flag-btn');
+
+    // Disable flag button
+    flagBtn.disabled = true;
+    flagBtn.textContent = '🚩 Flagging...';
+
+    try {
+        const response = await fetch('/api/swipe/flag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                paper_id: currentPaper.id,
+                reason: null  // Optional: could add a prompt for reason
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Animate card moving up
+            contentWrapper.classList.add('flag-up');
+
+            // Show success message
+            alert('✓ Paper flagged for systems team!\n\nNow choose Keep or Reject for yourself.');
+
+            // Wait for animation, then reset
+            await new Promise(resolve => setTimeout(resolve, 500));
+            contentWrapper.classList.remove('flag-up');
+
+            // Re-enable flag button
+            flagBtn.disabled = false;
+            flagBtn.textContent = '🚩 Flag for Systems Team';
+        } else {
+            alert('Error flagging paper: ' + data.error);
+            flagBtn.disabled = false;
+            flagBtn.textContent = '🚩 Flag for Systems Team';
+        }
+    } catch (error) {
+        console.error('Error flagging paper:', error);
+        alert('Network error. Please try again.');
+        flagBtn.disabled = false;
+        flagBtn.textContent = '🚩 Flag for Systems Team';
+    } finally {
+        isProcessing = false;
+    }
+}
+
+/**
  * Display paper information with fade-in
  */
 function displayPaper(paper) {

@@ -36,10 +36,12 @@ login_manager.login_view = 'auth.login'
 from routes.auth_routes import auth_bp
 from routes.swipe_routes import swipe_bp
 from routes.admin_routes import admin_bp
+from routes.systems_routes import systems_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(swipe_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(systems_bp)
 
 # ============================================================================
 # MAIN APPLICATION ROUTES
@@ -47,12 +49,17 @@ app.register_blueprint(admin_bp)
 
 main_bp = Blueprint('main', __name__)
 
+
 @main_bp.route('/dashboard')
 @login_required
 def dashboard():
     """Main dashboard - role-based view"""
     if current_user.is_groupmate():
         # Groupmates see swipe interface
+        return render_template('swipe.html', user=current_user)
+    elif current_user.is_systems():
+        # Systems team sees swipe interface by default
+        # They can navigate to flagged papers via menu
         return render_template('swipe.html', user=current_user)
     elif current_user.is_supervisor():
         # Supervisor sees consensus papers
@@ -67,6 +74,15 @@ def dashboard():
 def progress_page():
     """Group progress dashboard (accessible to all)"""
     return render_template('progress.html', user=current_user)
+
+
+@main_bp.route('/systems')
+@login_required
+def systems_page():
+    """Systems team flagged papers page"""
+    if not current_user.is_systems():
+        return redirect(url_for('main.dashboard'))
+    return render_template('systems.html', user=current_user, threshold=config.SYSTEMS_THRESHOLD)
 
 
 @main_bp.route('/api/user/me', methods=['GET'])

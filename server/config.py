@@ -37,15 +37,17 @@ class Config:
 
     # Invite codes (for signup)
     INVITE_CODES = {
-        # 8 Groupmates
+        # Normies
         'HERO-CALLUM-2025': {'role': 'groupmate', 'suggested_name': 'Callum'},
         'HERO-DANIIL-2025': {'role': 'groupmate', 'suggested_name': 'Daniil'},
-        'HERO-DYLAN-2025': {'role': 'groupmate', 'suggested_name': 'Dylan'},
-        'HERO-ELLEN-2025': {'role': 'groupmate', 'suggested_name': 'Ellen'},
-        'HERO-KOKO-2025': {'role': 'groupmate', 'suggested_name': 'Koko'},
         'HERO-MANQI-2025': {'role': 'groupmate', 'suggested_name': 'Manqi'},
         'HERO-ROHAN-2025': {'role': 'groupmate', 'suggested_name': 'Rohan'},
         'HERO-RATUL-2025': {'role': 'groupmate', 'suggested_name': 'Ratul'},
+
+        # Systems Team
+        'HERO-DYLAN-2025': {'role': 'systems', 'suggested_name': 'Dylan'},
+        'HERO-ELLEN-2025': {'role': 'systems', 'suggested_name': 'Ellen'},
+        'HERO-KOKO-2025': {'role': 'systems', 'suggested_name': 'Koko'},
 
         # 1 Supervisor
         'HERO-DAVIDE-2025': {'role': 'supervisor', 'suggested_name': 'Davide'},
@@ -54,6 +56,7 @@ class Config:
     # Consensus threshold (how many "keeps" needed for supervisor view)
     CONSENSUS_THRESHOLD = 5  # 5 out of 8 = >50%
 
+    SYSTEMS_THRESHOLD = 2
 
 class DevelopmentConfig(Config):
     """Development configuration"""

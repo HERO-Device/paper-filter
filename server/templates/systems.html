@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Systems Team Review - Paper Filter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 1.8em;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .nav-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .nav-btn:hover {
+            background: #5568d3;
+        }
+
+        .logout-btn {
+            background: #dc3545;
+        }
+
+        .logout-btn:hover {
+            background: #c82333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .page-title {
+            font-size: 2em;
+            color: #212529;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .page-subtitle {
+            text-align: center;
+            color: #6c757d;
+            margin-bottom: 40px;
+        }
+
+        .systems-badge {
+            display: inline-block;
+            background: #ffc107;
+            color: #000;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .info-banner {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .info-banner h3 {
+            color: #212529;
+            margin-bottom: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+            color: #000;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 1em;
+            opacity: 0.8;
+        }
+
+        .papers-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .paper-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            border-left: 4px solid #ffc107;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .paper-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .paper-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+
+        .paper-title {
+            font-size: 1.3em;
+            color: #212529;
+            font-weight: 600;
+            flex: 1;
+            margin-right: 20px;
+        }
+
+        .flag-badge {
+            background: #ffc107;
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .paper-meta {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .paper-abstract {
+            color: #495057;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .paper-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .vote-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9em;
+        }
+
+        .vote-stat {
+            color: #6c757d;
+        }
+
+        .vote-stat strong {
+            color: #212529;
+            font-size: 1.1em;
+        }
+
+        .decision-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .decision-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .decision-btn.keep {
+            background: #28a745;
+            color: white;
+        }
+
+        .decision-btn.keep:hover {
+            background: #218838;
+        }
+
+        .decision-btn.reject {
+            background: #dc3545;
+            color: white;
+        }
+
+        .decision-btn.reject:hover {
+            background: #c82333;
+        }
+
+        .decision-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .my-decision {
+            background: #e7f3ff;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            color: #004085;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #6c757d;
+            font-size: 1.2em;
+        }
+
+        .no-papers {
+            text-align: center;
+            padding: 60px;
+            color: #6c757d;
+        }
+
+        .no-papers-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            .decision-buttons {
+                flex-direction: column;
+            }
+
+            .decision-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚩 Systems Team Review</h1>
+        <div class="nav-buttons">
+            <a href="/progress" class="nav-btn">View Progress</a>
+            <button class="nav-btn logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2 class="page-title">
+            Systems Team Dashboard
+            <span class="systems-badge">SYSTEMS</span>
+        </h2>
+        <p class="page-subtitle">Review papers flagged by groupmates</p>
+
+        <div class="info-banner">
+            <h3>ℹ️ About Flagged Papers</h3>
+            <p>
+                Groupmates can flag papers that need specialized systems/technical review.
+                Review each paper and vote <strong>Keep</strong> or <strong>Reject</strong>.
+                Papers need <strong>{{ threshold }}</strong> keep votes to be included.
+            </p>
+        </div>
+
+        <div id="loading" class="loading">
+            Loading flagged papers...
+        </div>
+
+        <div id="content" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="total-flagged">0</div>
+                    <div class="stat-label">Total Flagged</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="pending-review">0</div>
+                    <div class="stat-label">Pending Review</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="my-reviewed">0</div>
+                    <div class="stat-label">You Reviewed</div>
+                </div>
+            </div>
+
+            <div id="papers-grid" class="papers-grid">
+                <!-- Papers will be inserted here -->
+            </div>
+
+            <div id="no-papers" class="no-papers" style="display: none;">
+                <div class="no-papers-icon">🎉</div>
+                <h3>No Flagged Papers</h3>
+                <p>All flagged papers have been reviewed!</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/systems.js"></script>
+</body>
+</html>

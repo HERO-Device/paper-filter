@@ -11,7 +11,8 @@ from models import (
     save_swipe_decision,
     get_user_progress,
     update_user_progress,
-    get_all_user_progress
+    get_all_user_progress,
+    flag_paper
 )
 
 swipe_bp = Blueprint('swipe', __name__)
@@ -113,4 +114,34 @@ def get_all_progress():
     return jsonify({
         'total_papers': total_papers,
         'users': [dict(p) for p in progress_list]
+    })
+
+
+@swipe_bp.route('/api/swipe/flag', methods=['POST'])
+@login_required
+def flag_paper_for_systems():
+    """Flag a paper for systems team review"""
+    if not current_user.is_groupmate():
+        return jsonify({'error': 'Only groupmates can flag papers'}), 403
+
+    data = request.json
+    paper_id = data.get('paper_id')
+    reason = data.get('reason', None)
+
+    if not paper_id:
+        return jsonify({'error': 'Paper ID required'}), 400
+
+    # Flag the paper
+    from models import flag_paper
+    success = flag_paper(current_user.id, paper_id, reason)
+
+    if not success:
+        return jsonify({'error': 'Failed to flag paper'}), 500
+
+    # Don't update progress - flagging doesn't count as a decision
+    # User will still need to swipe keep/reject on this paper
+
+    return jsonify({
+        'success': True,
+        'message': 'Paper flagged for systems team'
     })

@@ -385,6 +385,39 @@
             overflow-y: auto;
             padding-right: 10px;
         }
+
+        /* Flag button */
+        .flag-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #ffc107;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 100;
+        }
+
+        .flag-btn:hover {
+            background: #ffb300;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
+        }
+
+        .flag-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Flag animation - card moves up */
+        .paper-content-wrapper.flag-up {
+            transform: translateY(-120%) scale(0.8);
+            opacity: 0;
+        }
     </style>
 </head>
 <body>
@@ -392,6 +425,9 @@
         <h1>📄 Paper Filter</h1>
         <div class="user-info">
             <span class="user-name">{{ user.display_name }}</span>
+            {% if user.role == 'systems' %}
+            <a href="/systems" class="nav-btn" style="margin-right: 10px;">🚩 Flagged Papers</a>
+            {% endif %}
             <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
     </div>
@@ -428,6 +464,9 @@
         <div id="paper-card" class="paper-card" style="display: none;">
             <!-- ADD THIS OPENING TAG -->
             <div id="paper-content-wrapper" class="paper-content-wrapper">
+                <button class="flag-btn" onclick="flagPaper()" id="flag-btn">
+                    🚩 Flag for Systems Team
+                </button>
 
                 <h2 class="paper-title" id="paper-title"></h2>
 

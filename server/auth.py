@@ -34,6 +34,9 @@ class User(UserMixin):
         """Check if user is an admin"""
         return self.role == 'admin'
 
+    def is_systems(self):
+        """Check if user is on systems team"""
+        return self.role == 'systems'
 
 # ============================================================================
 # FLASK-LOGIN SETUP
