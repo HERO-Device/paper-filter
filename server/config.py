@@ -37,26 +37,27 @@ class Config:
 
     # Invite codes (for signup)
     INVITE_CODES = {
-        # Normies
-        'HERO-CALLUM-2025': {'role': 'groupmate', 'suggested_name': 'Callum'},
-        'HERO-DANIIL-2025': {'role': 'groupmate', 'suggested_name': 'Daniil'},
-        'HERO-MANQI-2025': {'role': 'groupmate', 'suggested_name': 'Manqi'},
-        'HERO-ROHAN-2025': {'role': 'groupmate', 'suggested_name': 'Rohan'},
-        'HERO-RATUL-2025': {'role': 'groupmate', 'suggested_name': 'Ratul'},
+        # 2 Reviewers
+        'HERO-REVIEWER1-2025': {'role': 'reviewer', 'suggested_name': 'Callum'},
+        'HERO-REVIEWER2-2025': {'role': 'reviewer', 'suggested_name': 'Rohan'},
 
-        # Systems Team
-        'HERO-DYLAN-2025': {'role': 'systems', 'suggested_name': 'Dylan'},
-        'HERO-ELLEN-2025': {'role': 'systems', 'suggested_name': 'Ellen'},
-        'HERO-KOKO-2025': {'role': 'systems', 'suggested_name': 'Koko'},
+        # 1 Moderator
+        'HERO-MODERATOR-2025': {'role': 'moderator', 'suggested_name': 'Daniil'},
+
+        # 1 Systems Team
+        'HERO-SYSTEMS-2025': {'role': 'systems', 'suggested_name': 'Systems'},
 
         # 1 Supervisor
-        'HERO-DAVIDE-2025': {'role': 'supervisor', 'suggested_name': 'Davide'},
+        'HERO-SUPERVISOR-2025': {'role': 'supervisor', 'suggested_name': 'Supervisor'},
+
+        # Admin
+        'HERO-ADMIN-2025': {'role': 'admin', 'suggested_name': 'Admin'},
     }
 
     # Consensus threshold (how many "keeps" needed for supervisor view)
-    CONSENSUS_THRESHOLD = 5  # 5 out of 8 = >50%
+    CONSENSUS_THRESHOLD = 2  #Both reviewers must agree
 
-    SYSTEMS_THRESHOLD = 2
+    SYSTEMS_THRESHOLD = 1
 
 class DevelopmentConfig(Config):
     """Development configuration"""

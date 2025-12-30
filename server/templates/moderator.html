@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Systems Team - Paper Filter</title>
+    <title>Moderator - Paper Filter</title>
     <style>
         * {
             margin: 0;
@@ -34,10 +34,10 @@
             font-size: 1.8em;
         }
 
-        .systems-badge {
+        .moderator-badge {
             display: inline-block;
-            background: #ffc107;
-            color: #000;
+            background: #ff6b6b;
+            color: white;
             padding: 6px 12px;
             border-radius: 20px;
             font-size: 0.8em;
@@ -128,7 +128,7 @@
             transform-origin: bottom center;
             position: relative;
             z-index: 1;
-            border: 3px solid #ffc107;
+            border: 3px solid #ff6b6b;
         }
 
         .paper-content-wrapper.swipe-left {
@@ -156,6 +156,19 @@
             }
         }
 
+        .dispute-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #ff6b6b;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 700;
+            z-index: 10;
+        }
+
         .paper-title {
             font-size: 1.5em;
             color: #212529;
@@ -177,18 +190,6 @@
 
         .meta-item strong {
             color: #495057;
-        }
-
-        .flag-reason {
-            background: #fff3cd;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-            border-left: 4px solid #ffc107;
-        }
-
-        .flag-reason strong {
-            color: #856404;
         }
 
         .actions {
@@ -298,7 +299,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🚩 Systems Team<span class="systems-badge">SYSTEMS</span></h1>
+        <h1>⚖️ Moderator Dashboard<span class="moderator-badge">MODERATOR</span></h1>
         <div class="user-info">
             <span class="user-name">{{ user.display_name }}</span>
             <button class="logout-btn" onclick="logout()">Logout</button>
@@ -306,30 +307,27 @@
     </div>
 
     <div class="swipe-container">
-        <h2 class="page-title">Review Flagged Papers</h2>
-        <p class="page-subtitle">Papers flagged by reviewers for technical review</p>
+        <h2 class="page-title">Resolve Disputed Papers</h2>
+        <p class="page-subtitle">Papers where reviewers disagreed (1 Yes, 1 No)</p>
 
         <div class="stats-bar">
             <div class="stat">
-                <div class="stat-value" id="total-flagged">-</div>
-                <div class="stat-label">Total Flagged</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value" id="pending-review">-</div>
+                <div class="stat-value" id="pending-count">-</div>
                 <div class="stat-label">Pending</div>
             </div>
             <div class="stat">
-                <div class="stat-value" id="reviewed-count">-</div>
-                <div class="stat-label">Reviewed</div>
+                <div class="stat-value" id="completed-count">-</div>
+                <div class="stat-label">Completed</div>
             </div>
         </div>
 
         <div id="loading" class="loading">
-            Loading flagged papers...
+            Loading disputed papers...
         </div>
 
         <div id="paper-card" style="display: none;">
             <div id="paper-content-wrapper" class="paper-content-wrapper">
+                <div class="dispute-badge">⚠️ DISPUTED</div>
 
                 <h2 class="paper-title" id="paper-title"></h2>
 
@@ -341,13 +339,10 @@
                         <strong>Year:</strong> <span id="paper-year"></span>
                     </div>
                     <div class="meta-item">
-                        <strong>Flagged by:</strong> <span id="flagged-by"></span>
+                        <strong>Votes:</strong> <span id="paper-votes"></span>
                     </div>
                 </div>
 
-                <div id="flag-reason" class="flag-reason" style="display: none;">
-                    <strong>Flag Reason:</strong> <span id="reason-text"></span>
-                </div>
             </div>
 
             <div class="actions">
@@ -367,8 +362,8 @@
 
         <div id="finished-screen" class="finished-screen">
             <div class="finished-icon">🎉</div>
-            <h2>All Flagged Papers Reviewed!</h2>
-            <p>You've completed your systems review.</p>
+            <h2>All Disputes Resolved!</h2>
+            <p>You've reviewed all disputed papers.</p>
             <div class="finished-stats">
                 <div class="finished-stat">
                     <strong id="final-kept">0</strong> kept
@@ -380,6 +375,6 @@
         </div>
     </div>
 
-    <script src="/static/js/systems.js"></script>
+    <script src="/static/js/moderator.js"></script>
 </body>
 </html>

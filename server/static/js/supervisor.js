@@ -1,14 +1,14 @@
 /**
- * Supervisor View JavaScript
- * Handles loading and displaying consensus papers
+ * Supervisor JavaScript
+ * Displays final consensus papers and progress tracking
  */
 
-let allPapers = [];
+let consensusPapers = [];
 
 /**
- * Load consensus papers from API
+ * Load consensus papers and progress
  */
-async function loadPapers() {
+async function loadData() {
     document.getElementById('loading').style.display = 'block';
     document.getElementById('content').style.display = 'none';
 
@@ -16,19 +16,34 @@ async function loadPapers() {
         const response = await fetch('/api/supervisor/consensus-papers');
         const data = await response.json();
 
-        allPapers = data.papers;
-        displayPapers(allPapers);
-
-        document.getElementById('consensus-count').textContent = data.total_papers;
-        document.getElementById('threshold-display').textContent = data.threshold + '/8';
+        consensusPapers = data.papers;
+        updateProgress(data.progress);
+        displayPapers(consensusPapers);
 
         document.getElementById('loading').style.display = 'none';
         document.getElementById('content').style.display = 'block';
     } catch (error) {
-        console.error('Error loading papers:', error);
+        console.error('Error loading data:', error);
         document.getElementById('loading').innerHTML =
-            '<span style="color: #dc3545;">Error loading papers. Please try again.</span>';
+            '<span style="color: #dc3545;">Error loading data. Please refresh.</span>';
     }
+}
+
+/**
+ * Update progress statistics
+ */
+function updateProgress(progress) {
+    const completed = progress.completed || 0;
+    const pending = progress.pending || 0;
+    const total = progress.total || 0;
+
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    document.getElementById('completed-count').textContent = completed;
+    document.getElementById('pending-count').textContent = pending;
+    document.getElementById('total-count').textContent = total;
+    document.getElementById('progress-bar').style.width = percentage + '%';
+    document.getElementById('progress-text').textContent = percentage + '%';
 }
 
 /**
@@ -37,15 +52,19 @@ async function loadPapers() {
 function displayPapers(papers) {
     const papersList = document.getElementById('papers-list');
     const noPapers = document.getElementById('no-papers');
+    const approvedCount = document.getElementById('approved-count');
 
     if (papers.length === 0) {
         papersList.style.display = 'none';
         noPapers.style.display = 'block';
+        approvedCount.textContent = '0 papers';
         return;
     }
 
     papersList.style.display = 'grid';
     noPapers.style.display = 'none';
+    approvedCount.textContent = `${papers.length} paper${papers.length !== 1 ? 's' : ''}`;
+
     papersList.innerHTML = '';
 
     papers.forEach(paper => {
@@ -55,123 +74,77 @@ function displayPapers(papers) {
 }
 
 /**
- * Create HTML for a single paper card
+ * Create HTML for a paper card
  */
 function createPaperCard(paper) {
-    const totalVotes = paper.keep_votes + paper.reject_votes;
-    const doiLink = paper.doi
-        ? `<a href="https://doi.org/${paper.doi}" target="_blank" class="paper-doi">DOI: ${paper.doi}</a>`
-        : '<span class="paper-doi">No DOI available</span>';
+    // Determine decision type badge
+    let badge = '';
+    if (paper.decision_type === 'auto') {
+        badge = '<span class="decision-badge badge-auto">✓ Reviewer Consensus (2/2)</span>';
+    } else if (paper.decision_type === 'moderator') {
+        badge = '<span class="decision-badge badge-moderator">⚖️ Moderator Decision</span>';
+    }
 
     return `
         <div class="paper-card">
-            <div class="paper-header">
-                <div class="paper-title">${paper.title || 'Untitled'}</div>
-                <div class="vote-badge">✅ ${paper.keep_votes} Keeps</div>
-            </div>
-
+            <div class="paper-title">${paper.title || 'Untitled'}</div>
+            
             <div class="paper-meta">
-                <div class="meta-item">
-                    <strong>Authors:</strong> ${paper.authors || 'Unknown'}
-                </div>
-                <div class="meta-item">
-                    <strong>Year:</strong> ${paper.year || 'N/A'}
-                </div>
-                ${paper.source ? `<div class="meta-item"><strong>Source:</strong> ${paper.source}</div>` : ''}
+                <div><strong>Authors:</strong> ${paper.authors || 'Unknown'}</div>
+                <div><strong>Year:</strong> ${paper.year || 'N/A'}</div>
             </div>
 
-            <div class="paper-abstract">
-                ${paper.abstract || 'No abstract available'}
-            </div>
-
-            <div class="paper-footer">
-                <div class="vote-stats">
-                    <div class="vote-stat">
-                        <strong>${paper.keep_votes}</strong> Keep
-                    </div>
-                    <div class="vote-stat">
-                        <strong>${paper.reject_votes}</strong> Reject
-                    </div>
-                    <div class="vote-stat">
-                        <strong>${totalVotes}</strong> Total Votes
-                    </div>
-                </div>
-                ${doiLink}
-            </div>
+            ${badge}
         </div>
     `;
-}
-
-/**
- * Filter papers based on search input
- */
-function filterPapers() {
-    const searchTerm = document.getElementById('search-input').value.toLowerCase();
-
-    if (searchTerm === '') {
-        displayPapers(allPapers);
-        return;
-    }
-
-    const filtered = allPapers.filter(paper => {
-        const title = (paper.title || '').toLowerCase();
-        const authors = (paper.authors || '').toLowerCase();
-        const abstract = (paper.abstract || '').toLowerCase();
-
-        return title.includes(searchTerm) ||
-               authors.includes(searchTerm) ||
-               abstract.includes(searchTerm);
-    });
-
-    displayPapers(filtered);
 }
 
 /**
  * Export papers to CSV
  */
 function exportToCSV() {
-    if (allPapers.length === 0) {
-        alert('No papers to export');
+    if (consensusPapers.length === 0) {
+        alert('No papers to export!');
         return;
     }
 
     // Create CSV content
-    const headers = ['Title', 'Authors', 'Year', 'Keep Votes', 'Reject Votes', 'Total Votes', 'DOI', 'Source'];
-    const rows = allPapers.map(paper => [
+    const headers = ['Title', 'Authors', 'Year', 'DOI', 'Source', 'Decision Type'];
+    const rows = consensusPapers.map(paper => [
         paper.title || '',
         paper.authors || '',
         paper.year || '',
-        paper.keep_votes || 0,
-        paper.reject_votes || 0,
-        (paper.keep_votes || 0) + (paper.reject_votes || 0),
         paper.doi || '',
-        paper.source || ''
+        paper.source || '',
+        paper.decision_type === 'auto' ? 'Reviewer Consensus' : 'Moderator Decision'
     ]);
 
     let csvContent = headers.join(',') + '\n';
     rows.forEach(row => {
-        // Escape commas and quotes in CSV
         const escapedRow = row.map(field => {
-            const str = String(field).replace(/"/g, '""');
-            return str.includes(',') ? `"${str}"` : str;
+            // Escape quotes and wrap in quotes if contains comma or quote
+            const escaped = String(field).replace(/"/g, '""');
+            return escaped.includes(',') || escaped.includes('"') ? `"${escaped}"` : escaped;
         });
         csvContent += escapedRow.join(',') + '\n';
     });
 
-    // Download CSV
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `consensus_papers_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', `consensus_papers_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 /**
- * Logout function
+ * Logout
  */
 function logout() {
     window.location.href = '/logout';
@@ -181,8 +154,8 @@ function logout() {
  * Initialize on page load
  */
 document.addEventListener('DOMContentLoaded', () => {
-    loadPapers();
+    loadData();
 
-    // Auto-refresh every 60 seconds
-    setInterval(loadPapers, 60000);
+    // Auto-refresh every 30 seconds
+    setInterval(loadData, 30000);
 });

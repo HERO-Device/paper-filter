@@ -146,29 +146,6 @@
             color: #495057;
         }
 
-        .paper-abstract {
-            color: #495057;
-            line-height: 1.6;
-            margin-bottom: 30px;
-            max-height: 300px;
-            overflow-y: auto;
-            padding-right: 10px;
-        }
-
-        .paper-abstract::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .paper-abstract::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 3px;
-        }
-
-        .paper-abstract::-webkit-scrollbar-thumb {
-            background: #667eea;
-            border-radius: 3px;
-        }
-
         .actions {
             display: flex;
             gap: 20px;
@@ -378,19 +355,8 @@
             color: #495057;
         }
 
-        .paper-abstract {
-            color: #495057;
-            line-height: 1.6;
-            max-height: 300px;
-            overflow-y: auto;
-            padding-right: 10px;
-        }
-
         /* Flag button */
         .flag-btn {
-            position: absolute;
-            top: 20px;
-            right: 20px;
             padding: 10px 20px;
             background: #ffc107;
             color: #000;
@@ -425,9 +391,6 @@
         <h1>📄 Paper Filter</h1>
         <div class="user-info">
             <span class="user-name">{{ user.display_name }}</span>
-            {% if user.role == 'systems' %}
-            <a href="/systems" class="nav-btn" style="margin-right: 10px;">🚩 Flagged Papers</a>
-            {% endif %}
             <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
     </div>
@@ -464,9 +427,6 @@
         <div id="paper-card" class="paper-card" style="display: none;">
             <!-- ADD THIS OPENING TAG -->
             <div id="paper-content-wrapper" class="paper-content-wrapper">
-                <button class="flag-btn" onclick="flagPaper()" id="flag-btn">
-                    🚩 Flag for Systems Team
-                </button>
 
                 <h2 class="paper-title" id="paper-title"></h2>
 
@@ -479,16 +439,18 @@
                     </div>
                 </div>
 
-                <div class="paper-abstract" id="paper-abstract"></div>
-
             </div>
-
+            <div style="text-align: center; margin: 20px 0;">
+                <button class="flag-btn" onclick="flagPaper()" id="flag-btn">
+                    Flag for Systems
+                </button>
+            </div>
             <div class="actions">
                 <button class="action-btn reject-btn" onclick="swipe('reject')" id="reject-btn">
-                    <span>❌</span> Reject (N)
+                    Reject (N)
                 </button>
                 <button class="action-btn keep-btn" onclick="swipe('keep')" id="keep-btn">
-                    <span>✅</span> Keep (Y)
+                    Keep (Y)
                 </button>
             </div>
 

@@ -36,12 +36,16 @@ login_manager.login_view = 'auth.login'
 from routes.auth_routes import auth_bp
 from routes.swipe_routes import swipe_bp
 from routes.admin_routes import admin_bp
-from routes.systems_routes import systems_bp
+from routes.moderator_routes import moderator_bp
+from routes.systems_routes import  systems_bp
+from routes.supervisor_routes import  supervisor_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(swipe_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(moderator_bp)
 app.register_blueprint(systems_bp)
+app.register_blueprint(supervisor_bp)
 
 # ============================================================================
 # MAIN APPLICATION ROUTES
@@ -54,26 +58,21 @@ main_bp = Blueprint('main', __name__)
 @login_required
 def dashboard():
     """Main dashboard - role-based view"""
-    if current_user.is_groupmate():
-        # Groupmates see swipe interface
+    if current_user.is_reviewer():
+        # Reviewers see swipe interface
         return render_template('swipe.html', user=current_user)
+    elif current_user.is_moderator():
+        # Moderator sees disputed papers
+        return render_template('moderator.html', user=current_user)
     elif current_user.is_systems():
-        # Systems team sees swipe interface by default
-        # They can navigate to flagged papers via menu
-        return render_template('swipe.html', user=current_user)
+        # Systems team sees flagged papers
+        return render_template('systems.html', user=current_user)
     elif current_user.is_supervisor():
-        # Supervisor sees consensus papers
+        # Supervisor sees results view
         return render_template('supervisor.html', user=current_user)
     else:
         # Admin sees everything
         return render_template('admin.html', user=current_user)
-
-
-@main_bp.route('/progress')
-@login_required
-def progress_page():
-    """Group progress dashboard (accessible to all)"""
-    return render_template('progress.html', user=current_user)
 
 
 @main_bp.route('/systems')
@@ -132,5 +131,5 @@ if __name__ == '__main__':
     app.run(
         host=config.HOST,
         port=config.PORT,
-        debug=config.DEBUG
+        debug=True
     )

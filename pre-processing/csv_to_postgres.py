@@ -1,3 +1,8 @@
+"""
+CSV to PostgreSQL Import Script
+Imports papers from CSV and optionally creates users
+"""
+
 import pandas as pd
 import psycopg2
 from psycopg2 import sql
@@ -7,102 +12,26 @@ import bcrypt
 from pathlib import Path
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
+# Database configuration
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
     'port': os.getenv('DB_PORT', '5432'),
-    'database': os.getenv('DB_NAME', 'paper_filter'),
+    'database': os.getenv('DB_NAME', 'paper-filter'),
     'user': os.getenv('DB_USER', 'postgres'),
     'password': os.getenv('DB_PASSWORD', 'your_password_here')
 }
 
+# Default users (optional - can be created via signup instead)
 USERS = [
-    {'username': 'callum', 'password': 'Pass', 'display_name': 'Callum', 'role': 'groupmate'},
-    {'username': 'daniil', 'password': 'Pass', 'display_name': 'Daniil ', 'role': 'groupmate'},
-    {'username': 'dylan', 'password': 'Pass', 'display_name': 'Dylan', 'role': 'groupmate'},
-    {'username': 'ellen', 'password': 'Pass', 'display_name': 'Ellen', 'role': 'groupmate'},
-    {'username': 'koko', 'password': 'Pass', 'display_name': 'Koko', 'role': 'groupmate'},
-    {'username': 'manqi', 'password': 'Pass', 'display_name': 'Manqi', 'role': 'groupmate'},
-    {'username': 'rohan', 'password': 'Pass', 'display_name': 'Rohan', 'role': 'groupmate'},
-    {'username': 'ratul', 'password': 'Pass', 'display_name': 'Ratul', 'role': 'groupmate'},
-    {'username': 'davide', 'password': 'Pass', 'display_name': 'Davide', 'role': 'supervisor'},
+    {'username': 'reviewer1', 'password': 'pass', 'display_name': 'Callum', 'role': 'reviewer'},
+    {'username': 'reviewer2', 'password': 'pass', 'display_name': 'Rohan', 'role': 'reviewer'},
+    {'username': 'moderator', 'password': 'pass', 'display_name': 'Daniil', 'role': 'moderator'},
+    {'username': 'systems', 'password': 'pass', 'display_name': 'Systems', 'role': 'systems'},
+    {'username': 'supervisor', 'password': 'pass', 'display_name': 'Supervisor', 'role': 'supervisor'},
 ]
-
-
-def create_database_schema(conn):
-    """Create all necessary tables for the application"""
-
-    cursor = conn.cursor()
-
-    print("Creating database schema...")
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR(50) UNIQUE NOT NULL,
-            password_hash VARCHAR(255) NOT NULL,
-            display_name VARCHAR(100),
-            role VARCHAR(20) NOT NULL CHECK (role IN ('groupmate', 'supervisor', 'admin')),
-            invite_code VARCHAR(50) UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-    print("Created 'users' table")
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS papers (
-            id SERIAL PRIMARY KEY,
-            title TEXT NOT NULL,
-            authors TEXT,
-            year INTEGER,
-            abstract TEXT,
-            doi VARCHAR(255),
-            source VARCHAR(100),
-            nlp_confidence VARCHAR(20),
-            nlp_reason TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-    print("Created 'papers' table")
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS swipe_decisions (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            paper_id INTEGER REFERENCES papers(id) ON DELETE CASCADE,
-            decision VARCHAR(10) NOT NULL CHECK (decision IN ('keep', 'reject')),
-            decided_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, paper_id)
-        );
-    """)
-    print("Created 'swipe_decisions' table")
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user_progress (
-            user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-            current_paper_index INTEGER DEFAULT 0,
-            total_kept INTEGER DEFAULT 0,
-            total_rejected INTEGER DEFAULT 0,
-            last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-    print("Created 'user_progress' table")
-
-    # Create indexes for performance
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_swipe_user ON swipe_decisions(user_id);
-    """)
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_swipe_paper ON swipe_decisions(paper_id);
-    """)
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_paper_title ON papers(title);
-    """)
-    print("Created indexes")
-
-    conn.commit()
-    print("Database schema created successfully\n")
 
 
 def import_papers_from_csv(csv_path, conn):
@@ -110,36 +39,13 @@ def import_papers_from_csv(csv_path, conn):
     Import papers from CSV to PostgreSQL
 
     Args:
-        csv_path: Path to CSV file (should be keep.csv from NLP filtering)
+        csv_path: Path to CSV file
         conn: PostgreSQL connection
     """
 
     print(f"Loading papers from {csv_path}...")
     df = pd.read_csv(csv_path)
 
-    column_mapping = {}
-    for col in df.columns:
-        col_lower = col.lower()
-        if 'title' in col_lower:
-            column_mapping['title'] = col
-        elif 'author' in col_lower:
-            column_mapping['authors'] = col
-        elif 'year' in col_lower or 'date' in col_lower:
-            column_mapping['year'] = col
-        elif 'abstract' in col_lower:
-            column_mapping['abstract'] = col
-        elif 'doi' in col_lower:
-            column_mapping['doi'] = col
-        elif 'source' in col_lower or 'journal' in col_lower:
-            column_mapping['source'] = col
-
-    if 'nlp_confidence' in df.columns:
-        column_mapping['nlp_confidence'] = 'nlp_confidence'
-
-    if 'title' not in column_mapping:
-        raise ValueError("Could not find title column in CSV")
-
-    print(f"Found columns: {list(column_mapping.keys())}")
     print(f"Total papers to import: {len(df):,}\n")
 
     cursor = conn.cursor()
@@ -149,42 +55,44 @@ def import_papers_from_csv(csv_path, conn):
     print("Importing papers...")
     for idx, row in df.iterrows():
         try:
-            title = row[column_mapping['title']]
+            # Get title
+            title = row.get('Title', '')
 
             # Skip if title is empty
             if pd.isna(title) or str(title).strip() == '':
                 skipped += 1
                 continue
 
-            # Extract other fields (with defaults)
-            authors = row.get(column_mapping.get('authors'), None)
-            year = row.get(column_mapping.get('year'), None)
-            abstract = row.get(column_mapping.get('abstract'), None)
-            doi = row.get(column_mapping.get('doi'), None)
-            source = row.get(column_mapping.get('source'), None)
-            nlp_confidence = row.get(column_mapping.get('nlp_confidence'), None)
+            # Get other fields
+            authors = row.get('Authors', None)
+            year = row.get('Year', None)
+            abstract = row.get('Abstract', None)
+            doi = row.get('DOI', None)
+            source = row.get('Source title', None)
 
+            # Convert year to int if possible
             if pd.notna(year):
                 try:
                     year = int(float(year))
                 except:
                     year = None
 
+            # Insert paper
             cursor.execute("""
-                           INSERT INTO papers (title, authors, year, abstract, doi, source, nlp_confidence)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                           INSERT INTO papers (title, authors, year, abstract, doi, source)
+                           VALUES (%s, %s, %s, %s, %s, %s)
                            """, (
                                str(title),
                                str(authors) if pd.notna(authors) else None,
                                year,
                                str(abstract) if pd.notna(abstract) else None,
                                str(doi) if pd.notna(doi) else None,
-                               str(source) if pd.notna(source) else None,
-                               str(nlp_confidence) if pd.notna(nlp_confidence) else None
+                               str(source) if pd.notna(source) else None
                            ))
 
             imported += 1
 
+            # Commit every 100 papers
             if imported % 100 == 0:
                 conn.commit()
                 print(f"Imported {imported:,}/{len(df):,} papers...")
@@ -192,12 +100,13 @@ def import_papers_from_csv(csv_path, conn):
         except Exception as e:
             print(f"Error importing row {idx}: {e}")
             skipped += 1
+            continue
 
     conn.commit()
 
     print("\nPaper Import Complete")
-    print(f"Successfully imported: {imported:,}")
-    print(f"Skipped: {skipped:,}")
+    print(f"  Successfully imported: {imported:,}")
+    print(f"  Skipped (empty titles): {skipped:,}")
 
 
 def create_users(conn, users_list):
@@ -211,11 +120,12 @@ def create_users(conn, users_list):
 
     cursor = conn.cursor()
 
-    print("Creating users...")
+    print("\nCreating users...")
     created = 0
     skipped = 0
 
     for user in users_list:
+        # Hash password
         password_hash = bcrypt.hashpw(
             user['password'].encode('utf-8'),
             bcrypt.gensalt()
@@ -238,43 +148,40 @@ def create_users(conn, users_list):
             if result:
                 user_id = result[0]
 
-                if user['role'] == 'groupmate':
+                # Create progress for reviewers
+                if user['role'] == 'reviewer':
                     cursor.execute("""
                                    INSERT INTO user_progress (user_id, current_paper_index, total_kept, total_rejected)
                                    VALUES (%s, 0, 0, 0) ON CONFLICT (user_id) DO NOTHING
                                    """, (user_id,))
 
-                print(f"Created user: {user['username']} ({user['role']})")
+                print(f" Created user: {user['username']} ({user['role']})")
                 created += 1
             else:
-                print(f"User already exists: {user['username']}")
+                print(f"  - User already exists: {user['username']}")
                 skipped += 1
 
         except Exception as e:
-            print(f"Error creating user {user['username']}: {e}")
+            print(f" Error creating user {user['username']}: {e}")
             skipped += 1
 
     conn.commit()
 
-    print("\nUser Creation Complete")
-    print(f"Created: {created}")
-    print(f"Skipped (already exist): {skipped}")
+    print(f"\nUser Creation Complete")
+    print(f"  Created: {created}")
+    print(f"  Skipped (already exist): {skipped}")
 
 
 def main():
     """Main function for command-line usage"""
 
     if len(sys.argv) < 2:
-        print("Usage: python csv_to_postgres.py <keep.csv> [--create-users]")
+        print("Usage: python csv_to_postgres.py <papers.csv> [--create-users]")
         print("\nExample:")
-        print("  python csv_to_postgres.py ../data/processed/keep.csv")
-        print("  python csv_to_postgres.py ../data/processed/keep.csv --create-users")
-        print("\nMake sure to set database credentials in .env file:")
-        print("  DB_HOST=localhost")
-        print("  DB_PORT=5432")
-        print("  DB_NAME=paper_filter")
-        print("  DB_USER=postgres")
-        print("  DB_PASSWORD=your_password")
+        print("  python csv_to_postgres.py ../data/processed/deduplicated.csv")
+        print("  python csv_to_postgres.py ../data/processed/deduplicated.csv --create-users")
+        print("\nNote: Make sure database tables are already created!")
+        print("      Run the SQL setup script first if needed.")
         sys.exit(1)
 
     csv_path = Path(sys.argv[1])
@@ -284,47 +191,51 @@ def main():
         print(f"Error: File not found: {csv_path}")
         sys.exit(1)
 
-    print("\nPostgreSQL Database Setup\n")
+    print("\n" + "=" * 60)
+    print("PostgreSQL Paper Import")
+    print("=" * 60)
 
-    print("Connecting to PostgreSQL...")
-    print(f"  Host: {DB_CONFIG['host']}")
-    print(f"  Database: {DB_CONFIG['database']}")
-    print(f"  User: {DB_CONFIG['user']}")
+    print(f"\nDatabase: {DB_CONFIG['database']} @ {DB_CONFIG['host']}")
+    print(f"CSV File: {csv_path}")
 
     try:
+        # Connect to database
+        print("\nConnecting to PostgreSQL...")
         conn = psycopg2.connect(**DB_CONFIG)
-        print("Connected to database\n")
+        print("✓ Connected to database\n")
 
-        create_database_schema(conn)
-
+        # Import papers
         import_papers_from_csv(csv_path, conn)
 
+        # Optionally create users
         if create_users_flag:
             create_users(conn, USERS)
-            print("Users have temporary passwords!")
-            print("They should change them after first login.\n")
         else:
-            print("ℹ Users not created (use --create-users flag to create them)\n")
+            print("\nℹ Users not created (use --create-users flag to create them)")
 
         conn.close()
 
-        print("\nDatabase setup complete!\n")
-        print("Next steps:")
-        print("  1. Start your Flask server")
-        print("  2. Users can sign up or log in")
-        print("  3. Begin swiping through papers!")
+        print("\n" + "=" * 60)
+        print("Import Complete!")
+        print("=" * 60)
+        print("\nNext steps:")
+        print("  1. Start your Flask server: python server/app.py")
+        print("  2. Sign up with invite codes or login with created users")
+        print("  3. Begin reviewing papers!")
 
     except psycopg2.OperationalError as e:
         print(f"\nDatabase connection error: {e}")
         print("\nTroubleshooting:")
         print("  1. Is PostgreSQL running?")
-        print("  2. Are your .env credentials correct?")
+        print("  2. Are your credentials in .env correct?")
         print("  3. Does the database exist?")
-        print("     CREATE DATABASE paper_filter;")
+        print("     Try: createdb paper-filter")
         sys.exit(1)
 
     except Exception as e:
         print(f"\nError: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 

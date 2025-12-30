@@ -1,9 +1,9 @@
 /**
- * Systems Team JavaScript
- * Handles loading and reviewing flagged papers
+ * Moderator JavaScript
+ * Handles loading and reviewing disputed papers (1 yes, 1 no)
  */
 
-let flaggedPapers = [];
+let disputedPapers = [];
 let currentIndex = 0;
 let currentPaper = null;
 let isProcessing = false;
@@ -11,20 +11,20 @@ let keptCount = 0;
 let rejectedCount = 0;
 
 /**
- * Load flagged papers from API
+ * Load disputed papers from API
  */
-async function loadFlaggedPapers() {
+async function loadDisputedPapers() {
     document.getElementById('loading').style.display = 'block';
     document.getElementById('paper-card').style.display = 'none';
 
     try {
-        const response = await fetch('/api/systems/flagged-papers');
+        const response = await fetch('/api/moderator/disputed-papers');
         const data = await response.json();
 
-        flaggedPapers = data.papers;
+        disputedPapers = data.papers;
         updateStats(data.stats);
 
-        if (flaggedPapers.length === 0) {
+        if (disputedPapers.length === 0) {
             showFinishedScreen();
         } else {
             displayCurrentPaper();
@@ -32,7 +32,7 @@ async function loadFlaggedPapers() {
 
         document.getElementById('loading').style.display = 'none';
     } catch (error) {
-        console.error('Error loading flagged papers:', error);
+        console.error('Error loading disputed papers:', error);
         document.getElementById('loading').innerHTML =
             '<span style="color: #dc3545;">Error loading papers. Please refresh.</span>';
     }
@@ -42,21 +42,20 @@ async function loadFlaggedPapers() {
  * Update statistics
  */
 function updateStats(stats) {
-    document.getElementById('total-flagged').textContent = stats.total_flagged || 0;
-    document.getElementById('pending-review').textContent = stats.pending || 0;
-    document.getElementById('reviewed-count').textContent = stats.reviewed || 0;
+    document.getElementById('pending-count').textContent = stats.pending || 0;
+    document.getElementById('completed-count').textContent = stats.completed || 0;
 }
 
 /**
  * Display current paper
  */
 function displayCurrentPaper() {
-    if (currentIndex >= flaggedPapers.length) {
+    if (currentIndex >= disputedPapers.length) {
         showFinishedScreen();
         return;
     }
 
-    currentPaper = flaggedPapers[currentIndex];
+    currentPaper = disputedPapers[currentIndex];
 
     const paperCard = document.getElementById('paper-card');
     const contentWrapper = document.getElementById('paper-content-wrapper');
@@ -68,16 +67,8 @@ function displayCurrentPaper() {
     document.getElementById('paper-title').textContent = currentPaper.title || 'No title';
     document.getElementById('paper-authors').textContent = currentPaper.authors || 'Unknown';
     document.getElementById('paper-year').textContent = currentPaper.year || 'N/A';
-    document.getElementById('flagged-by').textContent = currentPaper.flagged_by_name || 'Unknown';
-
-    // Show flag reason if exists
-    const flagReasonDiv = document.getElementById('flag-reason');
-    if (currentPaper.reason) {
-        document.getElementById('reason-text').textContent = currentPaper.reason;
-        flagReasonDiv.style.display = 'block';
-    } else {
-        flagReasonDiv.style.display = 'none';
-    }
+    document.getElementById('paper-votes').textContent =
+        `${currentPaper.keep_votes} Keep, ${currentPaper.reject_votes} Reject`;
 
     paperCard.style.display = 'block';
 
@@ -107,11 +98,11 @@ async function swipe(decision) {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     try {
-        const response = await fetch('/api/systems/decision', {
+        const response = await fetch('/api/moderator/decision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                flagged_paper_id: currentPaper.flag_id,
+                paper_id: currentPaper.paper_id,
                 decision: decision
             })
         });
@@ -129,8 +120,9 @@ async function swipe(decision) {
             // Remove animation class
             contentWrapper.classList.remove('swipe-left', 'swipe-right');
 
-            // Reload everything (this updates stats AND loads next paper)
-            await loadFlaggedPapers();  // ← MAKE SURE THIS IS HERE
+            // Move to next paper
+            currentIndex++;
+            displayCurrentPaper();
         } else {
             alert('Error saving decision: ' + data.error);
             contentWrapper.classList.remove('swipe-left', 'swipe-right');
@@ -180,5 +172,5 @@ document.addEventListener('keydown', (e) => {
  * Initialize on page load
  */
 document.addEventListener('DOMContentLoaded', () => {
-    loadFlaggedPapers();
+    loadDisputedPapers();
 });

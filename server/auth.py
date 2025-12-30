@@ -2,7 +2,7 @@
 Authentication Module
 Handles user authentication, login, and session management
 """
-
+from flask import jsonify
 from flask_login import LoginManager, UserMixin
 import bcrypt
 from models import get_user_by_id, get_user_by_username, create_user, check_invite_code_used
@@ -22,9 +22,17 @@ class User(UserMixin):
         self.display_name = display_name
         self.role = role
 
-    def is_groupmate(self):
-        """Check if user is a groupmate"""
-        return self.role == 'groupmate'
+    def is_reviewer(self):
+        """Check if user is a reviewer"""
+        return self.role == 'reviewer'
+
+    def is_moderator(self):
+        """Check if user is a moderator"""
+        return self.role == 'moderator'
+
+    def is_systems(self):
+        """Check if user is on systems team"""
+        return self.role == 'systems'
 
     def is_supervisor(self):
         """Check if user is a supervisor"""
@@ -33,10 +41,6 @@ class User(UserMixin):
     def is_admin(self):
         """Check if user is an admin"""
         return self.role == 'admin'
-
-    def is_systems(self):
-        """Check if user is on systems team"""
-        return self.role == 'systems'
 
 # ============================================================================
 # FLASK-LOGIN SETUP
@@ -114,17 +118,8 @@ def register_user(username, password, display_name, invite_code):
         return False, "Username must be alphanumeric", None
 
     # Validate password
-    if len(password) < 8:
-        return False, "Password must be at least 8 characters", None
-
-    if not any(c.isupper() for c in password):
-        return False, "Password must contain at least one uppercase letter", None
-
-    if not any(c.islower() for c in password):
-        return False, "Password must contain at least one lowercase letter", None
-
-    if not any(c.isdigit() for c in password):
-        return False, "Password must contain at least one number", None
+    if not password or len(password.strip()) == 0:
+        return jsonify({'error' :'Password Required'}), 400
 
     # Hash password
     password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')

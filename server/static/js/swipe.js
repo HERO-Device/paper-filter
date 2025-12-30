@@ -102,54 +102,67 @@ async function swipe(decision) {
 async function flagPaper() {
     if (isProcessing || !currentPaper) return;
 
-    // Confirm with user
-    const confirmed = confirm('Flag this paper for systems team review?\n\nYou will still need to Keep or Reject it yourself.');
+    const confirmed = confirm('Flag this paper for systems team review?\n\nThis will skip to the next paper.');
     if (!confirmed) return;
 
     isProcessing = true;
     const contentWrapper = document.getElementById('paper-content-wrapper');
     const flagBtn = document.getElementById('flag-btn');
 
-    // Disable flag button
     flagBtn.disabled = true;
-    flagBtn.textContent = '🚩 Flagging...';
+    const originalText = flagBtn.innerHTML;
+    flagBtn.innerHTML = '<span>⏳</span> Flagging...';
+
+    // Animate up
+    contentWrapper.style.transition = 'all 0.4s ease';
+    contentWrapper.style.transform = 'translateY(-120%) scale(0.8)';
+    contentWrapper.style.opacity = '0';
+
+    // Wait for animation
+    await new Promise(resolve => setTimeout(resolve, 400));
 
     try {
         const response = await fetch('/api/swipe/flag', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                paper_id: currentPaper.id,
-                reason: null  // Optional: could add a prompt for reason
+                paper_id: currentPaper.id
             })
         });
 
         const data = await response.json();
 
         if (data.success) {
-            // Animate card moving up
-            contentWrapper.classList.add('flag-up');
+            // Reset transform
+            contentWrapper.style.transition = 'none';
+            contentWrapper.style.transform = '';
+            contentWrapper.style.opacity = '1';
+            void contentWrapper.offsetWidth;
+            contentWrapper.style.transition = '';
 
-            // Show success message
-            alert('✓ Paper flagged for systems team!\n\nNow choose Keep or Reject for yourself.');
+            // Load next paper (backend already updated progress)
+            await loadPaper();
 
-            // Wait for animation, then reset
-            await new Promise(resolve => setTimeout(resolve, 500));
-            contentWrapper.classList.remove('flag-up');
-
-            // Re-enable flag button
             flagBtn.disabled = false;
-            flagBtn.textContent = '🚩 Flag for Systems Team';
+            flagBtn.innerHTML = originalText;
         } else {
-            alert('Error flagging paper: ' + data.error);
+            alert('Error: ' + data.error);
+            // Reset animation
+            contentWrapper.style.transition = 'none';
+            contentWrapper.style.transform = '';
+            contentWrapper.style.opacity = '1';
             flagBtn.disabled = false;
-            flagBtn.textContent = '🚩 Flag for Systems Team';
+            flagBtn.innerHTML = originalText;
         }
     } catch (error) {
         console.error('Error flagging paper:', error);
         alert('Network error. Please try again.');
+        // Reset animation
+        contentWrapper.style.transition = 'none';
+        contentWrapper.style.transform = '';
+        contentWrapper.style.opacity = '1';
         flagBtn.disabled = false;
-        flagBtn.textContent = '🚩 Flag for Systems Team';
+        flagBtn.innerHTML = originalText;
     } finally {
         isProcessing = false;
     }
@@ -174,7 +187,6 @@ function displayPaper(paper) {
     document.getElementById('paper-title').textContent = paper.title || 'No title';
     document.getElementById('paper-authors').textContent = paper.authors || 'Unknown';
     document.getElementById('paper-year').textContent = paper.year || 'N/A';
-    document.getElementById('paper-abstract').textContent = paper.abstract || 'No abstract available';
 
     paperCard.style.display = 'block';
 
@@ -230,10 +242,10 @@ function logout() {
 }
 
 /**
- * Keyboard shortcuts handler
+ * Keyboard shortcuts
  */
 document.addEventListener('keydown', (e) => {
-    if (isProcessing) return;
+    if (isProcessing || !currentPaper) return;  // Add !currentPaper check
 
     if (e.key.toLowerCase() === 'y') {
         swipe('keep');

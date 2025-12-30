@@ -22,7 +22,7 @@ swipe_bp = Blueprint('swipe', __name__)
 @login_required
 def get_current_paper():
     """Get current paper for user to swipe"""
-    if not current_user.is_groupmate():
+    if not current_user.is_reviewer():
         return jsonify({'error': 'Only groupmates can swipe'}), 403
 
     # Get user's progress
@@ -68,8 +68,8 @@ def get_current_paper():
 @login_required
 def submit_swipe_decision():
     """Submit swipe decision (keep or reject)"""
-    if not current_user.is_groupmate():
-        return jsonify({'error': 'Only groupmates can swipe'}), 403
+    if not current_user.is_reviewer():
+        return jsonify({'error': 'Only reviewers can swipe'}), 403
 
     data = request.json
     paper_id = data.get('paper_id')
@@ -120,28 +120,40 @@ def get_all_progress():
 @swipe_bp.route('/api/swipe/flag', methods=['POST'])
 @login_required
 def flag_paper_for_systems():
-    """Flag a paper for systems team review"""
-    if not current_user.is_groupmate():
-        return jsonify({'error': 'Only groupmates can flag papers'}), 403
+    """Flag a paper for systems team review and skip it"""
+    try:
+        if not current_user.is_reviewer():
+            return jsonify({'error': 'Only reviewers can flag papers'}), 403
 
-    data = request.json
-    paper_id = data.get('paper_id')
-    reason = data.get('reason', None)
+        data = request.json
+        paper_id = data.get('paper_id')
 
-    if not paper_id:
-        return jsonify({'error': 'Paper ID required'}), 400
+        if not paper_id:
+            return jsonify({'error': 'Paper ID required'}), 400
 
-    # Flag the paper
-    from models import flag_paper
-    success = flag_paper(current_user.id, paper_id, reason)
+        from models import flag_paper, get_user_progress, update_user_progress
 
-    if not success:
-        return jsonify({'error': 'Failed to flag paper'}), 500
+        print(f"DEBUG: Flagging paper {paper_id} for user {current_user.id}")
 
-    # Don't update progress - flagging doesn't count as a decision
-    # User will still need to swipe keep/reject on this paper
+        # Flag the paper (no swipe decision!)
+        success = flag_paper(current_user.id, paper_id, None)
+        print(f"DEBUG: Flag success: {success}")
 
-    return jsonify({
-        'success': True,
-        'message': 'Paper flagged for systems team'
-    })
+        if not success:
+            return jsonify({'error': 'Failed to flag paper'}), 500
+
+        # Update progress (just increment index, don't count as kept/rejected)
+        progress = get_user_progress(current_user.id)
+        print(f"DEBUG: Current progress: {progress}")
+
+        new_index = progress['current_paper_index'] + 1
+        update_user_progress(current_user.id, new_index, progress['total_kept'], progress['total_rejected'])
+        print(f"DEBUG: Progress updated")
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"ERROR in flag_paper_for_systems: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500

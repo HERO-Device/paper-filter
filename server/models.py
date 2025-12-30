@@ -68,7 +68,7 @@ def create_user(username, password_hash, display_name, role, invite_code):
         user_id = cursor.fetchone()[0]
 
         # Initialize progress for groupmates
-        if role == 'groupmate':
+        if role == 'reviewer':
             cursor.execute("""
                            INSERT INTO user_progress (user_id, current_paper_index, total_kept, total_rejected)
                            VALUES (%s, 0, 0, 0)
@@ -278,7 +278,7 @@ def get_all_user_progress():
                        p.last_active
                    FROM users u
                             LEFT JOIN user_progress p ON u.id = p.user_id
-                   WHERE u.role = 'groupmate'
+                   WHERE u.role = 'reviewer'
                    ORDER BY u.username
                    """)
     progress = cursor.fetchall()
@@ -287,81 +287,52 @@ def get_all_user_progress():
 
 
 # ============================================================================
-# CONSENSUS QUERIES
+# MODERATOR QUERIES
 # ============================================================================
 
-def get_consensus_papers(threshold=5):
+def get_disputed_papers():
     """
-    Get papers that have reached consensus (threshold or more 'keep' votes)
-
-    Args:
-        threshold: Minimum number of 'keep' votes (default: 5 out of 8)
+    Get papers where reviewers disagreed (1 keep, 1 reject)
+    Excludes any papers that have been flagged (those go to systems instead)
+    Only returns papers not yet decided by moderator
 
     Returns:
-        list of dicts with paper data and vote counts
+        list of dicts with paper data and reviewer votes
     """
     conn = get_db()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
+
     cursor.execute("""
-                   SELECT
-                       p.id,
-                       p.title,
-                       p.authors,
-                       p.year,
-                       p.abstract,
-                       p.doi,
-                       p.source,
-                       COUNT(CASE WHEN sd.decision = 'keep' THEN 1 END) as keep_votes,
-                       COUNT(CASE WHEN sd.decision = 'reject' THEN 1 END) as reject_votes
+                   SELECT p.id                                               as paper_id,
+                          p.title,
+                          p.authors,
+                          p.year,
+                          p.abstract,
+                          p.doi,
+                          p.source,
+                          COUNT(CASE WHEN sd.decision = 'keep' THEN 1 END)   as keep_votes,
+                          COUNT(CASE WHEN sd.decision = 'reject' THEN 1 END) as reject_votes
                    FROM papers p
-                            LEFT JOIN swipe_decisions sd ON p.id = sd.paper_id
+                            INNER JOIN swipe_decisions sd ON p.id = sd.paper_id
+                            LEFT JOIN moderator_decisions md ON p.id = md.paper_id
+                            LEFT JOIN flagged_papers fp ON p.id = fp.paper_id -- Check for flags
+                   WHERE md.id IS NULL -- Not yet decided by moderator
+                     AND fp.id IS NULL -- NOT flagged (flagged papers go to systems)
                    GROUP BY p.id
-                   HAVING COUNT(CASE WHEN sd.decision = 'keep' THEN 1 END) >= %s
-                   ORDER BY keep_votes DESC, p.title
-                   """, (threshold,))
-    papers = cursor.fetchall()
-    conn.close()
-    return papers
-
-
-def get_all_papers_with_votes():
-    """
-    Get all papers with their vote counts (for admin view)
-
-    Returns:
-        list of dicts with paper data and vote counts
-    """
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("""
-                   SELECT
-                       p.id,
-                       p.title,
-                       p.authors,
-                       p.year,
-                       p.abstract,
-                       p.doi,
-                       p.source,
-                       COUNT(CASE WHEN sd.decision = 'keep' THEN 1 END) as keep_votes,
-                       COUNT(CASE WHEN sd.decision = 'reject' THEN 1 END) as reject_votes,
-                       COUNT(sd.id) as total_votes
-                   FROM papers p
-                            LEFT JOIN swipe_decisions sd ON p.id = sd.paper_id
-                   GROUP BY p.id
-                   ORDER BY keep_votes DESC, p.title
+                   HAVING COUNT(sd.id) = 2                                       -- Both reviewers voted
+                      AND COUNT(CASE WHEN sd.decision = 'keep' THEN 1 END) = 1   -- 1 keep
+                      AND COUNT(CASE WHEN sd.decision = 'reject' THEN 1 END) = 1 -- 1 reject
+                   ORDER BY p.id
                    """)
+
     papers = cursor.fetchall()
     conn.close()
     return papers
 
 
-# ============================================================================
-# FLAGGED PAPERS QUERIES
-# ============================================================================
-
-def flag_paper(user_id, paper_id, reason=None):
+def save_moderator_decision(paper_id, decision, notes=None):
     """
-    Flag a paper for systems team review
+    Save moderator's decision on a disputed paper
 
     Returns:
         True if successful, False otherwise
@@ -371,9 +342,76 @@ def flag_paper(user_id, paper_id, reason=None):
 
     try:
         cursor.execute("""
+                       INSERT INTO moderator_decisions (paper_id, decision, notes)
+                       VALUES (%s, %s, %s) ON CONFLICT (paper_id) DO
+                       UPDATE
+                           SET decision = EXCLUDED.decision, notes = EXCLUDED.notes
+                       """, (paper_id, decision, notes))
+
+        conn.commit()
+        conn.close()
+        return True
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error saving moderator decision: {e}")
+        return False
+
+
+def get_moderator_stats():
+    """
+    Get statistics for moderator dashboard
+
+    Returns:
+        dict with pending and completed counts
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Count disputed papers
+    cursor.execute("""
+                   SELECT COUNT(DISTINCT p.id)
+                   FROM papers p
+                            INNER JOIN swipe_decisions sd ON p.id = sd.paper_id
+                            LEFT JOIN moderator_decisions md ON p.id = md.paper_id
+                   WHERE md.id IS NULL
+                   GROUP BY p.id
+                   HAVING COUNT(sd.id) = 2
+                      AND COUNT(CASE WHEN sd.decision = 'keep' THEN 1 END) = 1
+                      AND COUNT(CASE WHEN sd.decision = 'reject' THEN 1 END) = 1
+                   """)
+
+    pending = cursor.fetchone()
+    pending_count = pending[0] if pending else 0
+
+    # Count completed decisions
+    cursor.execute("SELECT COUNT(*) FROM moderator_decisions")
+    completed = cursor.fetchone()[0]
+
+    conn.close()
+
+    return {
+        'pending': pending_count,
+        'completed': completed
+    }
+
+# ============================================================================
+# FLAGGED PAPERS QUERIES
+# ============================================================================
+
+def flag_paper(user_id, paper_id, reason=None):
+    """Flag a paper for systems team review"""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
                        INSERT INTO flagged_papers (paper_id, flagged_by, reason)
-                       VALUES (%s, %s, %s) ON CONFLICT (paper_id, flagged_by) DO NOTHING
-            RETURNING id
+                       VALUES (%s, %s, %s) ON CONFLICT (paper_id, flagged_by) DO
+                       UPDATE
+                           SET reason = EXCLUDED.reason, flagged_at = CURRENT_TIMESTAMP
+                           RETURNING id
                        """, (paper_id, user_id, reason))
 
         result = cursor.fetchone()
@@ -387,24 +425,21 @@ def flag_paper(user_id, paper_id, reason=None):
         print(f"Error flagging paper: {e}")
         return False
 
-
-def get_flagged_papers(status='pending'):
+def get_flagged_papers_for_systems(status='pending'):
     """
-    Get all flagged papers for systems team
-
-    Args:
-        status: Filter by status (pending, reviewed, approved, rejected)
+    Get all flagged papers for systems team review
+    Only returns papers not yet reviewed by systems
 
     Returns:
         list of dicts with paper data and flag info
     """
     conn = get_db()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
+
     cursor.execute("""
                    SELECT fp.id          as flag_id,
                           fp.flagged_at,
                           fp.reason,
-                          fp.status,
                           p.id           as paper_id,
                           p.title,
                           p.authors,
@@ -413,23 +448,25 @@ def get_flagged_papers(status='pending'):
                           p.doi,
                           p.source,
                           u.display_name as flagged_by_name,
-                          COUNT(sd.id)   as systems_reviews
+                          COUNT(DISTINCT fp.flagged_by) as flag_count
                    FROM flagged_papers fp
                             JOIN papers p ON fp.paper_id = p.id
                             JOIN users u ON fp.flagged_by = u.id
                             LEFT JOIN systems_decisions sd ON fp.id = sd.flagged_paper_id
                    WHERE fp.status = %s
+                     AND sd.id IS NULL -- Not yet reviewed
                    GROUP BY fp.id, p.id, u.display_name
                    ORDER BY fp.flagged_at DESC
                    """, (status,))
+
     papers = cursor.fetchall()
     conn.close()
     return papers
 
 
-def save_systems_decision(flagged_paper_id, reviewer_id, decision, notes=None):
+def save_systems_decision(flagged_paper_id, decision, notes=None):
     """
-    Save systems team member's decision on a flagged paper
+    Save systems team decision on a flagged paper
 
     Returns:
         True if successful, False otherwise
@@ -439,11 +476,18 @@ def save_systems_decision(flagged_paper_id, reviewer_id, decision, notes=None):
 
     try:
         cursor.execute("""
-                       INSERT INTO systems_decisions (flagged_paper_id, reviewer_id, decision, notes)
-                       VALUES (%s, %s, %s, %s) ON CONFLICT (flagged_paper_id, reviewer_id) DO
+                       INSERT INTO systems_decisions (flagged_paper_id, decision, notes)
+                       VALUES (%s, %s, %s) ON CONFLICT (flagged_paper_id) DO
                        UPDATE
                            SET decision = EXCLUDED.decision, notes = EXCLUDED.notes
-                       """, (flagged_paper_id, reviewer_id, decision, notes))
+                       """, (flagged_paper_id, decision, notes))
+
+        # Update flagged paper status
+        cursor.execute("""
+                       UPDATE flagged_papers
+                       SET status = 'reviewed'
+                       WHERE id = %s
+                       """, (flagged_paper_id,))
 
         conn.commit()
         conn.close()
@@ -456,27 +500,37 @@ def save_systems_decision(flagged_paper_id, reviewer_id, decision, notes=None):
         return False
 
 
-def get_systems_team_progress(flagged_paper_id):
+def get_systems_stats():
     """
-    Get voting progress on a flagged paper
+    Get statistics for systems dashboard
 
     Returns:
-        dict with keep/reject counts
+        dict with total flagged and reviewed counts
     """
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("""
-                   SELECT decision, COUNT(*) as count
-                   FROM systems_decisions
-                   WHERE flagged_paper_id = %s
-                   GROUP BY decision
-                   """, (flagged_paper_id,))
 
-    results = cursor.fetchall()
+    # Total ever flagged
+    cursor.execute("SELECT COUNT(DISTINCT id) FROM flagged_papers")
+    total_flagged = cursor.fetchone()[0]
+
+    # Reviewed (have a systems decision)
+    cursor.execute("SELECT COUNT(*) FROM systems_decisions")
+    reviewed = cursor.fetchone()[0]
+
+    # Pending (flagged but no systems decision yet)
+    cursor.execute("""
+        SELECT COUNT(DISTINCT fp.id)
+        FROM flagged_papers fp
+        LEFT JOIN systems_decisions sd ON fp.id = sd.flagged_paper_id
+        WHERE sd.id IS NULL
+    """)
+    pending = cursor.fetchone()[0]
+
     conn.close()
 
-    votes = {'keep': 0, 'reject': 0}
-    for decision, count in results:
-        votes[decision] = count
-
-    return votes
+    return {
+        'total_flagged': total_flagged,
+        'reviewed': reviewed,
+        'pending': pending
+    }
