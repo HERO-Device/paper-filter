@@ -118,13 +118,24 @@ async function viewStage(stage) {
 async function loadStageDetail(stage) {
     try {
         const response = await fetch(`/api/supervisor/consensus-papers?stage=${stage}`);
+
+        // Check if response is OK
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const data = await response.json();
+
+        // Check if data has the expected structure
+        if (!data.stats || !data.papers) {
+            throw new Error('Invalid response structure from server');
+        }
 
         updateDetailProgress(data.stats);
         displayPapers(data.papers);
     } catch (error) {
         console.error('Error loading stage detail:', error);
-        alert('Error loading papers. Please try again.');
+        alert('Error loading papers: ' + error.message);
     }
 }
 
