@@ -8,24 +8,25 @@ from .paper import get_total_papers
 
 
 def save_swipe_decision(user_id, paper_id, decision, stage='title'):
-    """
-    Save user's swipe decision (keep or reject) with stage
-
-    Returns:
-        True if successful, False otherwise
-    """
+    """Save user's swipe decision (keep or reject) with stage"""
     conn = get_db()
     cursor = conn.cursor()
 
     try:
         cursor.execute("""
                        INSERT INTO swipe_decisions (user_id, paper_id, decision, stage)
-                       VALUES (%s, %s, %s, %s) ON CONFLICT (user_id, paper_id, stage) DO
+                       VALUES (%s, %s, %s, %s) ON CONFLICT (user_id, paper_id, stage) 
+            DO
                        UPDATE SET decision = EXCLUDED.decision, decided_at = NOW()
                        """, (user_id, paper_id, decision, stage))
 
         conn.commit()
         conn.close()
+
+        # Check for consensus after title swipe
+        if stage == 'title':
+            check_title_consensus(paper_id)
+
         return True
 
     except Exception as e:
@@ -33,6 +34,7 @@ def save_swipe_decision(user_id, paper_id, decision, stage='title'):
         conn.close()
         print(f"Error saving swipe decision: {e}")
         return False
+
 
 
 def get_user_decision(user_id, paper_id, stage='title'):
@@ -164,3 +166,73 @@ def get_all_user_progress(stage='title'):
     progress = cursor.fetchall()
     conn.close()
     return progress
+
+
+def check_title_consensus(paper_id):
+    """
+    Check if paper reached consensus in title stage.
+    If both reviewers kept it, add to abstract_eligible_papers.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get all title stage decisions for this paper
+    cursor.execute("""
+                   SELECT decision, COUNT(*) as count
+                   FROM swipe_decisions
+                   WHERE paper_id = %s AND stage = 'title'
+                   GROUP BY decision
+                   """, (paper_id,))
+
+    results = cursor.fetchall()
+    votes = {decision: count for decision, count in results}
+
+    keep_count = votes.get('keep', 0)
+
+    # Both kept it - add to abstract review
+    if keep_count == 2:
+        cursor.execute("""
+                       INSERT INTO abstract_eligible_papers (paper_id, source)
+                       VALUES (%s, 'reviewer_consensus') ON CONFLICT DO NOTHING
+                       """, (paper_id,))
+        conn.commit()
+        conn.close()
+        return 'consensus_keep'
+
+    conn.close()
+    return 'pending'
+
+
+def check_title_consensus(paper_id):
+    """
+    Check if paper reached consensus in title stage.
+    If both reviewers kept it, add to abstract_eligible_papers.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get all title stage decisions for this paper
+    cursor.execute("""
+                   SELECT decision, COUNT(*) as count
+                   FROM swipe_decisions
+                   WHERE paper_id = %s AND stage = 'title'
+                   GROUP BY decision
+                   """, (paper_id,))
+
+    results = cursor.fetchall()
+    votes = {decision: count for decision, count in results}
+
+    keep_count = votes.get('keep', 0)
+
+    # Both kept it - add to abstract review
+    if keep_count == 2:
+        cursor.execute("""
+                       INSERT INTO abstract_eligible_papers (paper_id, source)
+                       VALUES (%s, 'reviewer_consensus') ON CONFLICT (paper_id) DO NOTHING
+                       """, (paper_id,))
+        conn.commit()
+        conn.close()
+        return 'consensus_keep'
+
+    conn.close()
+    return 'pending'

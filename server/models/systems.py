@@ -71,6 +71,7 @@ def get_flagged_papers_for_systems(stage='title', status='pending'):
 
     elif stage == 'abstract':
         # For abstract stage, only show papers that were systems_keep from title stage
+        # and haven't been reviewed by systems user yet
         cursor.execute("""
                        SELECT fp.id          as flag_id,
                               fp.flagged_at,
@@ -87,11 +88,11 @@ def get_flagged_papers_for_systems(stage='title', status='pending'):
                                 JOIN papers p ON aep.paper_id = p.id
                                 JOIN flagged_papers fp ON p.id = fp.paper_id
                                 JOIN users u ON fp.flagged_by = u.id
+                                LEFT JOIN swipe_decisions sd ON p.id = sd.paper_id
+                           AND sd.stage = 'abstract'
+                           AND sd.user_id = (SELECT id FROM users WHERE role = 'systems' LIMIT 1)
                        WHERE aep.source = 'systems_keep'
-                         AND NOT EXISTS (SELECT 1
-                                         FROM swipe_decisions sd
-                                         WHERE sd.paper_id = p.id
-                                           AND sd.stage = 'abstract')
+                         AND sd.id IS NULL
                        ORDER BY fp.flagged_at DESC
                        """)
 
@@ -103,19 +104,35 @@ def get_flagged_papers_for_systems(stage='title', status='pending'):
 def save_systems_decision(flagged_paper_id, decision, notes=None):
     """
     Save systems team decision on a flagged paper
-
-    Returns:
-        True if successful, False otherwise
+    If kept in title stage, add to abstract_eligible_papers
     """
     conn = get_db()
     cursor = conn.cursor()
 
     try:
+        # Get the paper_id from flagged_paper_id
+        cursor.execute("""
+                       SELECT paper_id
+                       FROM flagged_papers
+                       WHERE id = %s
+                       """, (flagged_paper_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            conn.close()
+            return False
+
+        paper_id = result[0]
+
+        # Save systems decision
         cursor.execute("""
                        INSERT INTO systems_decisions (flagged_paper_id, decision, notes)
-                       VALUES (%s, %s, %s) ON CONFLICT (flagged_paper_id) DO
-                       UPDATE
-                           SET decision = EXCLUDED.decision, notes = EXCLUDED.notes, decided_at = NOW()
+                       VALUES (%s, %s, %s) ON CONFLICT (flagged_paper_id) 
+            DO
+                       UPDATE SET
+                           decision = EXCLUDED.decision,
+                           notes = EXCLUDED.notes,
+                           decided_at = NOW()
                        """, (flagged_paper_id, decision, notes))
 
         # Update flagged paper status
@@ -124,6 +141,13 @@ def save_systems_decision(flagged_paper_id, decision, notes=None):
                        SET status = 'reviewed'
                        WHERE id = %s
                        """, (flagged_paper_id,))
+
+        # If kept, add to abstract_eligible_papers for abstract review
+        if decision == 'keep':
+            cursor.execute("""
+                           INSERT INTO abstract_eligible_papers (paper_id, source)
+                           VALUES (%s, 'systems_keep') ON CONFLICT (paper_id) DO NOTHING
+                           """, (paper_id,))
 
         conn.commit()
         conn.close()
