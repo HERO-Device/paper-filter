@@ -1,132 +1,331 @@
 """
-Supervisor Routes
-Handles API endpoints for supervisor to view consensus papers
+Supervisor Routes - View consensus results and export data
+Handles both title and abstract stages
 """
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, render_template, jsonify, request, Response
 from flask_login import login_required, current_user
-from models import get_db
-from psycopg2.extras import RealDictCursor
+import models
+import csv
+import io
 
 supervisor_bp = Blueprint('supervisor', __name__)
 
 
-@supervisor_bp.route('/api/supervisor/consensus-papers', methods=['GET'])
+@supervisor_bp.route('/supervisor')
 @login_required
-def get_consensus_papers_api():
-    """Get all consensus papers (2 reviewer yes OR moderator yes OR systems yes)"""
+def supervisor_interface():
+    """Render supervisor interface"""
     if not current_user.is_supervisor() and not current_user.is_admin():
-        return jsonify({'error': 'Supervisor access required'}), 403
+        return "Access denied. Supervisors only.", 403
 
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    return render_template('supervisor.html')
 
-    # Get papers with automatic consensus (2 yes votes from reviewers, NOT flagged)
-    cursor.execute("""
-        SELECT
-            p.id,
-            p.title,
-            p.authors,
-            p.year,
-            p.doi,
-            p.source,
-            'auto' as decision_type
-        FROM papers p
-        INNER JOIN swipe_decisions sd ON p.id = sd.paper_id
-        LEFT JOIN flagged_papers fp ON p.id = fp.paper_id
-        WHERE sd.decision = 'keep' AND fp.id IS NULL
-        GROUP BY p.id
-        HAVING COUNT(sd.id) = 2
-    """)
 
-    auto_consensus = cursor.fetchall()
+@supervisor_bp.route('/api/supervisor/consensus-papers')
+@login_required
+def get_consensus_papers():
+    """Get all consensus papers for a given stage"""
+    if not current_user.is_supervisor() and not current_user.is_admin():
+        return jsonify({'error': 'Access denied'}), 403
 
-    # Get papers decided by moderator (keep only)
-    cursor.execute("""
-        SELECT 
-            p.id,
-            p.title,
-            p.authors,
-            p.year,
-            p.doi,
-            p.source,
-            'moderator' as decision_type
-        FROM papers p
-        INNER JOIN moderator_decisions md ON p.id = md.paper_id
-        WHERE md.decision = 'keep'
-    """)
+    stage = request.args.get('stage', 'title')
 
-    moderator_keeps = cursor.fetchall()
+    if stage not in ['title', 'abstract']:
+        return jsonify({'error': 'Invalid stage'}), 400
 
-    # Get papers approved by systems team (keep only)
-    cursor.execute("""
-        SELECT 
-            p.id,
-            p.title,
-            p.authors,
-            p.year,
-            p.doi,
-            p.source,
-            'systems' as decision_type
-        FROM papers p
-        INNER JOIN flagged_papers fp ON p.id = fp.paper_id
-        INNER JOIN systems_decisions sd ON fp.id = sd.flagged_paper_id
-        WHERE sd.decision = 'keep'
-    """)
+    try:
+        conn = models.get_db()
+        cursor = conn.cursor(cursor_factory=models.RealDictCursor)
 
-    systems_keeps = cursor.fetchall()
-
-    # Combine all three lists (remove duplicates by ID)
-    all_papers = list(auto_consensus) + list(moderator_keeps) + list(systems_keeps)
-
-    # Remove duplicates (same paper might be in multiple categories)
-    seen_ids = set()
-    unique_papers = []
-    for paper in all_papers:
-        if paper['id'] not in seen_ids:
-            seen_ids.add(paper['id'])
-            unique_papers.append(paper)
-
-    # Get progress stats
-    cursor.execute("SELECT COUNT(*) FROM papers")
-    total_papers = cursor.fetchone()['count']
-
-    # Count papers that need decisions
-    cursor.execute("""
-        SELECT COUNT(DISTINCT p.id)
-        FROM papers p
-        LEFT JOIN swipe_decisions sd ON p.id = sd.paper_id
-        LEFT JOIN flagged_papers fp ON p.id = fp.paper_id
-        WHERE 
-            -- Not fully reviewed by both reviewers
-            (SELECT COUNT(*) FROM swipe_decisions WHERE paper_id = p.id) < 2
-            OR
-            -- Disputed but no moderator decision
-            (
-                (SELECT COUNT(*) FROM swipe_decisions WHERE paper_id = p.id AND decision = 'keep') = 1
-                AND (SELECT COUNT(*) FROM swipe_decisions WHERE paper_id = p.id AND decision = 'reject') = 1
-                AND NOT EXISTS (SELECT 1 FROM moderator_decisions WHERE paper_id = p.id)
+        # Query consensus papers for this stage
+        cursor.execute("""
+            WITH consensus_papers AS (
+                -- Reviewer consensus (2 keeps, not flagged)
+                SELECT DISTINCT 
+                    p.id,
+                    p.title,
+                    p.authors,
+                    p.year,
+                    p.doi,
+                    p.source,
+                    'Reviewer Consensus (2/2)' as decision_type
+                FROM papers p
+                WHERE (
+                    SELECT COUNT(*) 
+                    FROM swipe_decisions sd 
+                    WHERE sd.paper_id = p.id 
+                    AND sd.decision = 'keep' 
+                    AND sd.stage = %s
+                ) = 2
+                AND NOT EXISTS (
+                    SELECT 1 FROM flagged_papers fp WHERE fp.paper_id = p.id
+                )
+                
+                UNION
+                
+                -- Moderator keeps
+                SELECT DISTINCT 
+                    p.id,
+                    p.title,
+                    p.authors,
+                    p.year,
+                    p.doi,
+                    p.source,
+                    '⚖️ Moderator Decision' as decision_type
+                FROM papers p
+                JOIN moderator_decisions md ON p.id = md.paper_id
+                WHERE md.decision = 'keep' 
+                AND md.stage = %s
+                
+                UNION
+                
+                -- Systems keeps (for title stage only)
+                SELECT DISTINCT 
+                    p.id,
+                    p.title,
+                    p.authors,
+                    p.year,
+                    p.doi,
+                    p.source,
+                    '🔧 Systems Approved' as decision_type
+                FROM papers p
+                JOIN flagged_papers fp ON p.id = fp.paper_id
+                JOIN systems_decisions sd ON sd.flagged_paper_id = fp.id
+                WHERE sd.decision = 'keep'
+                AND %s = 'title'
             )
-            OR
-            -- Flagged but no systems decision
-            (
-                fp.id IS NOT NULL
-                AND NOT EXISTS (SELECT 1 FROM systems_decisions WHERE flagged_paper_id = fp.id)
+            SELECT * FROM consensus_papers
+            ORDER BY id
+        """, (stage, stage, stage))
+
+        papers = cursor.fetchall()
+
+        # Get progress stats for this stage
+        cursor.execute("""
+            SELECT COUNT(*) FROM papers
+        """)
+        total_papers = cursor.fetchone()['count']
+
+        if stage == 'abstract':
+            # For abstract stage, total is from abstract_eligible_papers
+            cursor.execute("""
+                SELECT COUNT(*) FROM abstract_eligible_papers
+            """)
+            total_papers = cursor.fetchone()['count']
+
+        # Get review completion stats
+        cursor.execute("""
+            SELECT 
+                COUNT(DISTINCT user_id) as reviewers,
+                AVG(current_paper_index) as avg_progress
+            FROM user_progress
+            WHERE stage = %s
+        """, (stage,))
+
+        progress_stats = cursor.fetchone()
+
+        conn.close()
+
+        return jsonify({
+            'papers': papers,
+            'stats': {
+                'total_papers': total_papers,
+                'consensus_count': len(papers),
+                'pending': total_papers - len(papers),
+                'completion_percentage': (len(papers) / total_papers * 100) if total_papers > 0 else 0,
+                'reviewers': progress_stats['reviewers'] if progress_stats else 0,
+                'avg_progress': float(progress_stats['avg_progress']) if progress_stats and progress_stats['avg_progress'] else 0
+            }
+        })
+
+    except Exception as e:
+        print(f"Error getting consensus papers: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@supervisor_bp.route('/api/supervisor/stage-status')
+@login_required
+def get_stage_status():
+    """Get status of both title and abstract stages"""
+    if not current_user.is_supervisor() and not current_user.is_admin():
+        return jsonify({'error': 'Access denied'}), 403
+
+    try:
+        # Get abstract stage status
+        abstract_status = models.get_abstract_stage_status()
+
+        # Get title stage completion
+        conn = models.get_db()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM papers")
+        total_title_papers = cursor.fetchone()[0]
+
+        # Count how many papers have been reviewed by both reviewers in title stage
+        cursor.execute("""
+            SELECT COUNT(DISTINCT paper_id) 
+            FROM swipe_decisions 
+            WHERE stage = 'title'
+            GROUP BY paper_id
+            HAVING COUNT(DISTINCT user_id) = 2
+        """)
+        reviewed_title_papers = len(cursor.fetchall())
+
+        conn.close()
+
+        title_complete = reviewed_title_papers >= total_title_papers
+
+        return jsonify({
+            'title_stage': {
+                'complete': title_complete,
+                'total_papers': total_title_papers,
+                'reviewed_papers': reviewed_title_papers,
+                'completion_percentage': (reviewed_title_papers / total_title_papers * 100) if total_title_papers > 0 else 0
+            },
+            'abstract_stage': {
+                'initialized': abstract_status['initialized'],
+                'total_papers': abstract_status['total_papers'],
+                'reviewer_pool': abstract_status['reviewer_pool'],
+                'systems_pool': abstract_status['systems_pool']
+            }
+        })
+
+    except Exception as e:
+        print(f"Error getting stage status: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@supervisor_bp.route('/api/supervisor/initialize-abstract-stage', methods=['POST'])
+@login_required
+def initialize_abstract_stage():
+    """Initialize abstract stage by populating eligible papers from title stage"""
+    if not current_user.is_supervisor() and not current_user.is_admin():
+        return jsonify({'error': 'Access denied'}), 403
+
+    try:
+        count = models.populate_abstract_eligible_papers()
+
+        return jsonify({
+            'success': True,
+            'papers_added': count
+        })
+
+    except Exception as e:
+        print(f"Error initializing abstract stage: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@supervisor_bp.route('/api/supervisor/export-csv')
+@login_required
+def export_csv():
+    """Export consensus papers to CSV"""
+    if not current_user.is_supervisor() and not current_user.is_admin():
+        return jsonify({'error': 'Access denied'}), 403
+
+    stage = request.args.get('stage', 'title')
+
+    if stage not in ['title', 'abstract']:
+        return jsonify({'error': 'Invalid stage'}), 400
+
+    try:
+        conn = models.get_db()
+        cursor = conn.cursor(cursor_factory=models.RealDictCursor)
+
+        # Same query as get_consensus_papers
+        cursor.execute("""
+            WITH consensus_papers AS (
+                -- Reviewer consensus (2 keeps, not flagged)
+                SELECT DISTINCT 
+                    p.id,
+                    p.title,
+                    p.authors,
+                    p.year,
+                    p.doi,
+                    p.source,
+                    'Reviewer Consensus (2/2)' as decision_type
+                FROM papers p
+                WHERE (
+                    SELECT COUNT(*) 
+                    FROM swipe_decisions sd 
+                    WHERE sd.paper_id = p.id 
+                    AND sd.decision = 'keep' 
+                    AND sd.stage = %s
+                ) = 2
+                AND NOT EXISTS (
+                    SELECT 1 FROM flagged_papers fp WHERE fp.paper_id = p.id
+                )
+                
+                UNION
+                
+                -- Moderator keeps
+                SELECT DISTINCT 
+                    p.id,
+                    p.title,
+                    p.authors,
+                    p.year,
+                    p.doi,
+                    p.source,
+                    '⚖️ Moderator Decision' as decision_type
+                FROM papers p
+                JOIN moderator_decisions md ON p.id = md.paper_id
+                WHERE md.decision = 'keep' 
+                AND md.stage = %s
+                
+                UNION
+                
+                -- Systems keeps (for title stage only)
+                SELECT DISTINCT 
+                    p.id,
+                    p.title,
+                    p.authors,
+                    p.year,
+                    p.doi,
+                    p.source,
+                    '🔧 Systems Approved' as decision_type
+                FROM papers p
+                JOIN flagged_papers fp ON p.id = fp.paper_id
+                JOIN systems_decisions sd ON sd.flagged_paper_id = fp.id
+                WHERE sd.decision = 'keep'
+                AND %s = 'title'
             )
-    """)
+            SELECT * FROM consensus_papers
+            ORDER BY id
+        """, (stage, stage, stage))
 
-    pending_result = cursor.fetchone()
-    pending_count = pending_result['count'] if pending_result else 0
+        papers = cursor.fetchall()
+        conn.close()
 
-    completed_count = len(unique_papers)
+        # Create CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
 
-    conn.close()
+        # Write header
+        writer.writerow(['ID', 'Title', 'Authors', 'Year', 'DOI', 'Source', 'Decision Type', 'Stage'])
 
-    return jsonify({
-        'papers': unique_papers,
-        'progress': {
-            'total': total_papers,
-            'completed': completed_count,
-            'pending': pending_count
-        }
-    })
+        # Write rows
+        for paper in papers:
+            writer.writerow([
+                paper['id'],
+                paper['title'],
+                paper['authors'],
+                paper['year'],
+                paper['doi'],
+                paper['source'],
+                paper['decision_type'],
+                stage
+            ])
+
+        # Create response
+        output.seek(0)
+        filename = f'consensus_papers_{stage}_stage.csv'
+
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+
+    except Exception as e:
+        print(f"Error exporting CSV: {e}")
+        return jsonify({'error': 'Internal server error'}), 500

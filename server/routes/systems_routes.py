@@ -1,43 +1,39 @@
 """
-Systems Routes
-Handles API endpoints for systems team to review flagged papers
+Systems Routes - Review flagged papers
 """
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required, current_user
-from models import (
-    get_flagged_papers_for_systems,
-    save_systems_decision,
-    get_systems_stats
-)
+import models
 
 systems_bp = Blueprint('systems', __name__)
 
 
 @systems_bp.route('/systems')
 @login_required
-def systems_page():
-    """Systems team dashboard page"""
+def systems_interface():
+    """Render systems interface"""
     if not current_user.is_systems():
-        return redirect(url_for('main.dashboard'))
-    return render_template('systems.html', user=current_user)
+        return "Access denied. Systems team only.", 403
+
+    return render_template('systems.html')
 
 
-@systems_bp.route('/api/systems/flagged-papers', methods=['GET'])
+@systems_bp.route('/api/systems/flagged-papers')
 @login_required
-def get_flagged_papers_api():
-    """Get all flagged papers for systems team"""
+def get_flagged_papers():
+    """Get flagged papers for review"""
+    if not current_user.is_systems():
+        return jsonify({'error': 'Access denied'}), 403
+
+    stage = request.args.get('stage', 'title')
+
+    if stage not in ['title', 'abstract']:
+        return jsonify({'error': 'Invalid stage'}), 400
+
     try:
-        if not current_user.is_systems():
-            return jsonify({'error': 'Systems team access required'}), 403
-
-        print(f"DEBUG: Loading flagged papers for user {current_user.id}")
-
-        papers = get_flagged_papers_for_systems(status='pending')
-        print(f"DEBUG: Found {len(papers)} flagged papers")
-
-        stats = get_systems_stats()
-        print(f"DEBUG: Stats: {stats}")
+        papers = models.get_flagged_papers_for_systems(stage)
+        stats = models.get_systems_stats(stage)
 
         return jsonify({
             'papers': papers,
@@ -45,33 +41,47 @@ def get_flagged_papers_api():
         })
 
     except Exception as e:
-        print(f"ERROR in get_flagged_papers_api: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        print(f"Error getting flagged papers: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @systems_bp.route('/api/systems/decision', methods=['POST'])
 @login_required
-def submit_systems_decision():
-    """Submit systems team decision on a flagged paper"""
+def save_decision():
+    """Save systems decision on flagged paper"""
     if not current_user.is_systems():
-        return jsonify({'error': 'Systems team access required'}), 403
+        return jsonify({'error': 'Access denied'}), 403
 
-    data = request.json
-    flagged_paper_id = data.get('flagged_paper_id')
-    decision = data.get('decision')
-    notes = data.get('notes', None)
+    data = request.get_json()
+    flag_id = data.get('flag_id')
+    paper_id = data.get('paper_id')
+    decision = data.get('decision')  # 'keep' or 'reject'
+    notes = data.get('notes', '')
+    stage = data.get('stage', 'title')
 
-    if decision not in ['keep', 'reject']:
-        return jsonify({'error': 'Invalid decision'}), 400
+    if stage not in ['title', 'abstract']:
+        return jsonify({'error': 'Invalid stage'}), 400
 
-    success = save_systems_decision(flagged_paper_id, decision, notes)
+    try:
+        if stage == 'title':
+            # Title stage uses flag_id
+            if not flag_id or not decision:
+                return jsonify({'error': 'Missing data'}), 400
 
-    if not success:
-        return jsonify({'error': 'Failed to save decision'}), 500
+            success = models.save_systems_decision(flag_id, decision, notes)
 
-    return jsonify({
-        'success': True,
-        'message': 'Decision saved successfully'
-    })
+        elif stage == 'abstract':
+            # Abstract stage uses swipe decisions
+            if not paper_id or not decision:
+                return jsonify({'error': 'Missing data'}), 400
+
+            success = models.save_swipe_decision(current_user.id, paper_id, decision, stage)
+
+        if not success:
+            return jsonify({'error': 'Failed to save decision'}), 500
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"Error saving systems decision: {e}")
+        return jsonify({'error': 'Internal server error'}), 500

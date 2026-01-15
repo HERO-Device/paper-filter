@@ -1,6 +1,6 @@
 /**
- * Moderator JavaScript
- * Handles loading and reviewing disputed papers (1 yes, 1 no)
+ * Moderator JavaScript - With Stage Support
+ * Handles loading and reviewing disputed papers (1 yes, 1 no) across stages
  */
 
 let disputedPapers = [];
@@ -9,6 +9,32 @@ let currentPaper = null;
 let isProcessing = false;
 let keptCount = 0;
 let rejectedCount = 0;
+let currentStage = 'title'; // Default to title stage
+
+/**
+ * Switch between title and abstract stages
+ */
+function switchStage(stage) {
+    if (isProcessing) return;
+
+    currentStage = stage;
+
+    // Update tab UI
+    document.querySelectorAll('.stage-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.stage === stage) {
+            tab.classList.add('active');
+        }
+    });
+
+    // Reset state
+    currentIndex = 0;
+    keptCount = 0;
+    rejectedCount = 0;
+
+    // Reload papers for new stage
+    loadDisputedPapers();
+}
 
 /**
  * Load disputed papers from API
@@ -16,9 +42,10 @@ let rejectedCount = 0;
 async function loadDisputedPapers() {
     document.getElementById('loading').style.display = 'block';
     document.getElementById('paper-card').style.display = 'none';
+    document.getElementById('finished-screen').classList.remove('active');
 
     try {
-        const response = await fetch('/api/moderator/disputed-papers');
+        const response = await fetch(`/api/moderator/disputed-papers?stage=${currentStage}`);
         const data = await response.json();
 
         disputedPapers = data.papers;
@@ -70,6 +97,15 @@ function displayCurrentPaper() {
     document.getElementById('paper-votes').textContent =
         `${currentPaper.keep_votes} Keep, ${currentPaper.reject_votes} Reject`;
 
+    // Show/hide abstract based on stage
+    const abstractSection = document.getElementById('abstract-section');
+    if (currentStage === 'abstract' && currentPaper.abstract) {
+        abstractSection.style.display = 'block';
+        document.getElementById('paper-abstract').textContent = currentPaper.abstract;
+    } else {
+        abstractSection.style.display = 'none';
+    }
+
     paperCard.style.display = 'block';
 
     // Trigger fade-in animation
@@ -86,6 +122,7 @@ async function swipe(decision) {
 
     isProcessing = true;
     const contentWrapper = document.getElementById('paper-content-wrapper');
+    const paperCard = document.getElementById('paper-card');  // ADD THIS LINE
 
     // Disable buttons
     document.getElementById('keep-btn').disabled = true;
@@ -103,7 +140,8 @@ async function swipe(decision) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 paper_id: currentPaper.paper_id,
-                decision: decision
+                decision: decision,
+                stage: currentStage
             })
         });
 
@@ -120,9 +158,12 @@ async function swipe(decision) {
             // Remove animation class
             contentWrapper.classList.remove('swipe-left', 'swipe-right');
 
-            // Move to next paper
-            currentIndex++;
-            displayCurrentPaper();
+            // Hide paper card while loading
+            paperCard.style.display = 'none';
+
+            // Reload everything (updates stats AND loads next paper)
+            currentIndex = 0; // Reset index
+            await loadDisputedPapers();
         } else {
             alert('Error saving decision: ' + data.error);
             contentWrapper.classList.remove('swipe-left', 'swipe-right');
@@ -159,7 +200,7 @@ function logout() {
  * Keyboard shortcuts
  */
 document.addEventListener('keydown', (e) => {
-    if (isProcessing || !currentPaper) return;  // Add !currentPaper check
+    if (isProcessing || !currentPaper) return;
 
     if (e.key.toLowerCase() === 'y') {
         swipe('keep');

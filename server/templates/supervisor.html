@@ -92,6 +92,117 @@
             margin-bottom: 40px;
         }
 
+        /* Stage Overview */
+        .stage-overview {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .stage-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 30px;
+            border-top: 4px solid #667eea;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stage-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+
+        .stage-card h3 {
+            font-size: 1.4em;
+            color: #212529;
+            margin-bottom: 15px;
+        }
+
+        .stage-status {
+            font-size: 0.95em;
+            color: #6c757d;
+            margin-bottom: 15px;
+        }
+
+        .stage-progress-bar {
+            background: #e9ecef;
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .stage-progress-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+
+        .stage-stats {
+            font-size: 0.9em;
+            color: #495057;
+            margin-bottom: 20px;
+        }
+
+        .stage-card .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-primary {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #218838;
+        }
+
+        /* Detail View */
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .detail-header h2 {
+            font-size: 1.8em;
+            color: #212529;
+        }
+
+        .detail-actions {
+            display: flex;
+            gap: 15px;
+        }
+
+        .detail-actions .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
         .progress-section {
             background: #f8f9fa;
             padding: 30px;
@@ -259,6 +370,11 @@
             color: #856404;
         }
 
+        .badge-systems {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
         .loading {
             text-align: center;
             padding: 60px;
@@ -276,6 +392,26 @@
             font-size: 4em;
             margin-bottom: 20px;
         }
+
+        @media (max-width: 768px) {
+            .stage-overview {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-header {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .detail-actions {
+                width: 100%;
+                flex-direction: column;
+            }
+
+            .detail-actions .btn {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -288,14 +424,53 @@
     </div>
 
     <div class="container">
-        <h2 class="page-title">Final Consensus Papers</h2>
-        <p class="page-subtitle">Papers approved through reviewer consensus or moderator decision</p>
+        <h2 class="page-title">Review Progress</h2>
+        <p class="page-subtitle">Monitor progress across title and abstract review stages</p>
 
         <div id="loading" class="loading">
             Loading results...
         </div>
 
-        <div id="content" style="display: none;">
+        <!-- Stage Overview (default view) -->
+        <div id="overview" style="display: none;">
+            <div class="stage-overview">
+                <!-- Title Stage Card -->
+                <div class="stage-card">
+                    <h3>📋 Title Review Stage</h3>
+                    <div class="stage-status" id="title-status">Loading...</div>
+                    <div class="stage-progress-bar">
+                        <div class="stage-progress-fill" id="title-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="stage-stats" id="title-stats">-</div>
+                    <button class="btn btn-secondary" onclick="viewStage('title')">View Details</button>
+                </div>
+
+                <!-- Abstract Stage Card -->
+                <div class="stage-card">
+                    <h3>📝 Abstract Review Stage</h3>
+                    <div class="stage-status" id="abstract-status">Loading...</div>
+                    <div class="stage-progress-bar">
+                        <div class="stage-progress-fill" id="abstract-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="stage-stats" id="abstract-stats">-</div>
+                    <button class="btn btn-secondary" onclick="viewStage('abstract')">View Details</button>
+                    <button class="btn btn-primary" id="init-abstract-btn" onclick="initializeAbstractStage()" style="display: none;">
+                        Initialize Abstract Stage
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detail View (hidden by default) -->
+        <div id="detail-view" style="display: none;">
+            <div class="detail-header">
+                <h2 id="detail-title">Stage Details</h2>
+                <div class="detail-actions">
+                    <button class="btn btn-secondary" onclick="backToOverview()">← Back to Overview</button>
+                    <button class="btn btn-primary" onclick="exportToCSV()">📥 Export CSV</button>
+                </div>
+            </div>
+
             <!-- Progress Section -->
             <div class="progress-section">
                 <div class="progress-header">
@@ -317,13 +492,6 @@
                         <span id="progress-text">0%</span>
                     </div>
                 </div>
-            </div>
-
-            <!-- Export Section -->
-            <div class="export-section">
-                <button class="export-btn" onclick="exportToCSV()">
-                    <span>📥</span> Export Consensus Papers to CSV
-                </button>
             </div>
 
             <!-- Papers List -->
