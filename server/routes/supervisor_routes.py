@@ -5,6 +5,7 @@ Handles both title and abstract stages
 
 from flask import Blueprint, render_template, jsonify, request, Response
 from flask_login import login_required, current_user
+from psycopg2.extras import RealDictCursor
 import models
 import csv
 import io
@@ -36,7 +37,7 @@ def get_consensus_papers():
 
     try:
         conn = models.get_db()
-        cursor = conn.cursor(cursor_factory=models.RealDictCursor)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         # Query consensus papers for this stage
         cursor.execute("""
