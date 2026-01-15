@@ -67,7 +67,8 @@ def get_paper():
                 'authors': paper['authors'],
                 'year': paper['year'],
                 'doi': paper['doi'],
-                'source': paper['source']
+                'source': paper['source'],
+                'abstract': paper.get('abstract', '')  # ADD THIS LINE
             },
             'progress': {
                 'current': current_index + 1,

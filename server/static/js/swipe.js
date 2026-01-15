@@ -1,17 +1,50 @@
 /**
- * Swipe Interface JavaScript - With Animations
- * Handles paper loading, swiping, and smooth transitions
+ * Swipe Interface JavaScript - With Animations & Stage Support
+ * Handles paper loading, swiping, and smooth transitions across title/abstract stages
  */
 
 let currentPaper = null;
 let isProcessing = false;
+let currentStage = 'title'; // Default to title stage
+
+/**
+ * Switch between title and abstract stages
+ */
+function switchStage(stage) {
+    if (isProcessing) return;
+
+    currentStage = stage;
+
+    // Update tab UI
+    document.querySelectorAll('.stage-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.stage === stage) {
+            tab.classList.add('active');
+        }
+    });
+
+    // Show/hide flag button based on stage
+    const flagContainer = document.getElementById('flag-container');
+    if (stage === 'title') {
+        flagContainer.style.display = 'block';
+    } else {
+        flagContainer.style.display = 'none';
+    }
+
+    // Reset and reload for new stage
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('paper-card').style.display = 'none';
+    document.getElementById('finished-screen').classList.remove('active');
+
+    loadPaper();
+}
 
 /**
  * Load current paper from API
  */
 async function loadPaper() {
     try {
-        const response = await fetch('/api/swipe/get-paper');
+        const response = await fetch(`/api/swipe/get-paper?stage=${currentStage}`);
         const data = await response.json();
 
         if (data.finished) {
@@ -52,24 +85,30 @@ async function swipe(decision) {
 
     isProcessing = true;
     const contentWrapper = document.getElementById('paper-content-wrapper');
+    const paperCard = document.getElementById('paper-card');  // ADD THIS
 
     // Disable buttons
     document.getElementById('keep-btn').disabled = true;
     document.getElementById('reject-btn').disabled = true;
 
-    // Animate content in arc (left or right)
+    // Animate content in arc
     contentWrapper.classList.add(decision === 'keep' ? 'swipe-right' : 'swipe-left');
 
-    // Wait for arc animation (500ms)
+    // Wait for animation
     await new Promise(resolve => setTimeout(resolve, 500));
 
+    // Hide paper card while loading next one  // ADD THIS
+    paperCard.style.display = 'none';           // ADD THIS
+
     try {
+        // ... rest of the function stays the same
         const response = await fetch('/api/swipe/decision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 paper_id: currentPaper.id,
-                decision: decision
+                decision: decision,
+                stage: currentStage
             })
         });
 
@@ -77,7 +116,7 @@ async function swipe(decision) {
 
         if (data.success) {
             // Update progress
-            updateProgress(data.new_progress);
+            updateProgress(data.progress);
 
             // Load next paper (displayPaper will handle cleanup)
             await loadPaper();
@@ -97,10 +136,10 @@ async function swipe(decision) {
 }
 
 /**
- * Flag paper for systems team review
+ * Flag paper for systems team review (TITLE STAGE ONLY)
  */
 async function flagPaper() {
-    if (isProcessing || !currentPaper) return;
+    if (isProcessing || !currentPaper || currentStage !== 'title') return;
 
     const confirmed = confirm('Flag this paper for systems team review?\n\nThis will skip to the next paper.');
     if (!confirmed) return;
@@ -126,7 +165,8 @@ async function flagPaper() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                paper_id: currentPaper.id
+                paper_id: currentPaper.id,
+                stage: currentStage
             })
         });
 
@@ -140,7 +180,7 @@ async function flagPaper() {
             void contentWrapper.offsetWidth;
             contentWrapper.style.transition = '';
 
-            // Load next paper (backend already updated progress)
+            // Load next paper
             await loadPaper();
 
             flagBtn.disabled = false;
@@ -177,51 +217,30 @@ function displayPaper(paper) {
     const paperCard = document.getElementById('paper-card');
     const contentWrapper = document.getElementById('paper-content-wrapper');
 
-    // Remove old animation classes immediately (before setting new content)
+    // Remove old animation classes
     contentWrapper.classList.remove('swipe-left', 'swipe-right', 'fade-in');
-
-    // Force reflow to reset animations
     void contentWrapper.offsetWidth;
 
-    // Update content
+    // Update basic content
     document.getElementById('paper-title').textContent = paper.title || 'No title';
     document.getElementById('paper-authors').textContent = paper.authors || 'Unknown';
     document.getElementById('paper-year').textContent = paper.year || 'N/A';
 
+    // ONLY show abstract in abstract stage
+    const abstractSection = document.getElementById('abstract-section');
+    if (currentStage === 'abstract' && paper.abstract) {
+        abstractSection.style.display = 'block';
+        document.getElementById('paper-abstract').textContent = paper.abstract;
+    } else {
+        abstractSection.style.display = 'none';
+    }
+
     paperCard.style.display = 'block';
 
-    // Trigger fade-in animation
+    // Trigger fade-in
     setTimeout(() => {
         contentWrapper.classList.add('fade-in');
     }, 50);
-}
-
-/**
- * Show decision overlay (big ✓ or ✗)
- */
-function showDecisionOverlay(decision) {
-    // Create overlay if it doesn't exist
-    let overlay = document.getElementById('decision-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'decision-overlay';
-        overlay.className = 'decision-overlay';
-        document.querySelector('.swipe-container').appendChild(overlay);
-    }
-
-    // Set icon and color
-    overlay.textContent = decision === 'keep' ? '✓' : '✗';
-    overlay.className = `decision-overlay ${decision} show`;
-}
-
-/**
- * Hide decision overlay
- */
-function hideDecisionOverlay() {
-    const overlay = document.getElementById('decision-overlay');
-    if (overlay) {
-        overlay.classList.remove('show');
-    }
 }
 
 /**
@@ -245,7 +264,7 @@ function logout() {
  * Keyboard shortcuts
  */
 document.addEventListener('keydown', (e) => {
-    if (isProcessing || !currentPaper) return;  // Add !currentPaper check
+    if (isProcessing || !currentPaper) return;
 
     if (e.key.toLowerCase() === 'y') {
         swipe('keep');
@@ -258,5 +277,10 @@ document.addEventListener('keydown', (e) => {
  * Initialize on page load
  */
 document.addEventListener('DOMContentLoaded', () => {
+    // Hide flag button if starting in abstract stage
+    if (currentStage === 'abstract') {
+        document.getElementById('flag-container').style.display = 'none';
+    }
+
     loadPaper();
 });
