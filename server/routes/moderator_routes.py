@@ -1,65 +1,80 @@
 """
-Moderator Routes
-Handles API endpoints for moderator to review disputed papers
+Moderator Routes - Resolve disputed papers (1 keep, 1 reject)
 """
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required, current_user
-from models import (
-    get_disputed_papers,
-    save_moderator_decision,
-    get_moderator_stats
-)
+import models
 
 moderator_bp = Blueprint('moderator', __name__)
 
 
 @moderator_bp.route('/moderator')
 @login_required
-def moderator_page():
-    """Moderator dashboard page"""
+def moderator_interface():
+    """Render moderator interface"""
     if not current_user.is_moderator():
-        return redirect(url_for('main.dashboard'))
-    return render_template('moderator.html', user=current_user)
+        return "Access denied. Moderators only.", 403
+
+    return render_template('moderator.html')
 
 
-@moderator_bp.route('/api/moderator/disputed-papers', methods=['GET'])
+@moderator_bp.route('/api/moderator/disputed-papers')
 @login_required
-def get_disputed_papers_api():
-    """Get all disputed papers (1 yes, 1 no from reviewers)"""
+def get_disputed_papers():
+    """Get papers with 1 keep, 1 reject"""
     if not current_user.is_moderator():
-        return jsonify({'error': 'Moderator access required'}), 403
+        return jsonify({'error': 'Access denied'}), 403
 
-    papers = get_disputed_papers()
-    stats = get_moderator_stats()
+    stage = request.args.get('stage', 'title')
 
-    return jsonify({
-        'papers': papers,
-        'stats': stats
-    })
+    if stage not in ['title', 'abstract']:
+        return jsonify({'error': 'Invalid stage'}), 400
+
+    try:
+        papers = models.get_disputed_papers(stage)
+        stats = models.get_moderator_stats(stage)
+
+        return jsonify({
+            'papers': papers,
+            'stats': stats
+        })
+
+    except Exception as e:
+        print(f"Error getting disputed papers: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @moderator_bp.route('/api/moderator/decision', methods=['POST'])
 @login_required
-def submit_moderator_decision():
-    """Submit moderator decision on a disputed paper"""
+def save_decision():
+    """Save moderator's decision"""
     if not current_user.is_moderator():
-        return jsonify({'error': 'Moderator access required'}), 403
+        return jsonify({'error': 'Access denied'}), 403
 
-    data = request.json
+    data = request.get_json()
     paper_id = data.get('paper_id')
-    decision = data.get('decision')
-    notes = data.get('notes', None)
+    decision = data.get('decision')  # 'keep' or 'reject'
+    notes = data.get('notes', '')
+    stage = data.get('stage', 'title')
+
+    if not paper_id or not decision:
+        return jsonify({'error': 'Missing data'}), 400
 
     if decision not in ['keep', 'reject']:
         return jsonify({'error': 'Invalid decision'}), 400
 
-    success = save_moderator_decision(paper_id, decision, notes)
+    if stage not in ['title', 'abstract']:
+        return jsonify({'error': 'Invalid stage'}), 400
 
-    if not success:
-        return jsonify({'error': 'Failed to save decision'}), 500
+    try:
+        success = models.save_moderator_decision(paper_id, decision, notes, stage)
 
-    return jsonify({
-        'success': True,
-        'message': 'Decision saved successfully'
-    })
+        if not success:
+            return jsonify({'error': 'Failed to save decision'}), 500
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"Error saving moderator decision: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
