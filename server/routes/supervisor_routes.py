@@ -231,7 +231,7 @@ def export_csv():
 
     try:
         conn = models.get_db()
-        cursor = conn.cursor(cursor_factory=models.RealDictCursor)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         # Same query as get_consensus_papers
         cursor.execute("""
