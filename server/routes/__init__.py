@@ -1,9 +1,7 @@
 """
 Routes Package
-Contains all API route handlers organized by functionality
+Contains all API route handlers organised by functionality.
+
+Blueprints are defined in the individual route modules and registered on the
+application in app.py. Nothing is exported from here.
 """
-
-from flask import Blueprint
-
-# This file can be empty or contain shared route utilities
-# Individual route files will be imported in app.py

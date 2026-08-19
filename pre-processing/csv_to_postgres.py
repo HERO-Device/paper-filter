@@ -5,7 +5,6 @@ Imports papers from CSV and optionally creates users
 
 import pandas as pd
 import psycopg2
-from psycopg2 import sql
 import sys
 import os
 import bcrypt
@@ -74,7 +73,7 @@ def import_papers_from_csv(csv_path, conn):
             if pd.notna(year):
                 try:
                     year = int(float(year))
-                except:
+                except (TypeError, ValueError):
                     year = None
 
             # Insert paper
@@ -167,7 +166,7 @@ def create_users(conn, users_list):
 
     conn.commit()
 
-    print(f"\nUser Creation Complete")
+    print("\nUser Creation Complete")
     print(f"  Created: {created}")
     print(f"  Skipped (already exist): {skipped}")
 

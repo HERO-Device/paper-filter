@@ -195,7 +195,7 @@ def filter_papers(input_csv, output_dir="filtered_results"):
 
 
     if start_idx == 0:
-        response = input("\nPress Enter to start filtering (Ctrl+C to cancel)... ")
+        input("\nPress Enter to start filtering (Ctrl+C to cancel)... ")
 
     print("\nStarting Paper Filtering")
 
@@ -233,13 +233,13 @@ def filter_papers(input_csv, output_dir="filtered_results"):
     print(f"Papers to REJECT: {len(reject_df):,} ({len(reject_df) / len(df) * 100:.1f}%)")
 
     if len(keep_df) > 0:
-        print(f"\nConfidence breakdown (KEEP):")
+        print("\nConfidence breakdown (KEEP):")
         print(keep_df['nlp_confidence'].value_counts().to_string())
 
     print(f"\nResults saved to: {output_path}/")
     print(f"  ├── keep.csv ({len(keep_df):,} papers)")
     print(f"  ├── reject.csv ({len(reject_df):,} papers)")
-    print(f"  └── progress.csv (full results)")
+    print("  └── progress.csv (full results)")
 
     return keep_df, reject_df
 

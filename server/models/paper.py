@@ -71,3 +71,33 @@ def get_paper_by_id(paper_id):
     paper = cursor.fetchone()
     conn.close()
     return paper
+
+
+def get_all_papers_with_votes(stage='title'):
+    """
+    Get every paper with its reviewer vote counts for a given stage.
+
+    Returns:
+        list of dicts with paper fields plus keep_votes, reject_votes, total_votes
+    """
+    conn = get_db()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor.execute("""
+                   SELECT p.id,
+                          p.title,
+                          p.authors,
+                          p.year,
+                          p.doi,
+                          p.source,
+                          COUNT(sd.id) FILTER (WHERE sd.decision = 'keep')   AS keep_votes,
+                          COUNT(sd.id) FILTER (WHERE sd.decision = 'reject') AS reject_votes,
+                          COUNT(sd.id)                                       AS total_votes
+                   FROM papers p
+                            LEFT JOIN swipe_decisions sd
+                                      ON sd.paper_id = p.id AND sd.stage = %s
+                   GROUP BY p.id, p.title, p.authors, p.year, p.doi, p.source
+                   ORDER BY p.id
+                   """, (stage,))
+    papers = cursor.fetchall()
+    conn.close()
+    return papers
